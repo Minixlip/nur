@@ -1,0 +1,92 @@
+Phase 2: The "Brain" (Python AI Engine)
+Goal: Create a standalone program that takes text and spits out audio files, without needing the user to install Python.
+
+Create Python Folder: Make a folder named python_backend in your project root (outside src).
+
+Write the Script: Create engine.py.
+
+Use sherpa-onnx to load a model.
+
+Accept JSON input from "stdin" (Standard Input).
+
+Generate a .wav file to a temp folder.
+
+Print the filename to "stdout" (Standard Output) so Electron knows it's done.
+
+Compile It: Use PyInstaller to turn engine.py into engine.exe (or a binary on Mac/Linux).
+
+Command: pyinstaller --onefile engine.py
+
+Move to Resources: Copy the generated engine.exe into a new folder: resources/bin/.
+
+Why? Electron needs this file included in the final installer.
+
+Phase 3: The "Bridge" (Connecting React to Python)
+Goal: Make your nice React UI talk to that ugly Python executable.
+
+Spawn Process (Main Process):
+
+In src/main/index.ts, import spawn from child_process.
+
+Launch resources/bin/engine.exe when the app starts. Keep it running in the background.
+
+IPC Handlers:
+
+In src/main/index.ts, add ipcMain.handle('speak', async (event, text) => { ... }).
+
+This function sends text to the Python process and waits for the response (the audio filename).
+
+Frontend Hook:
+
+Create a React hook useTTS.ts.
+
+It calls window.electron.ipcRenderer.invoke('speak', text).
+
+It returns the audio file path to your component.
+
+Phase 4: The Reader (EPUB Integration)
+Goal: Actually display books and extract the text for the AI.
+
+Install epub.js: Run npm install epubjs.
+
+Create Reader.tsx:
+
+This is a new page/route: /read/:bookId.
+
+Use epub.js to render the book into a <div>.
+
+Text Extraction Logic:
+
+You cannot just send the whole book to the AI. You need to extract Sentence by Sentence.
+
+Write a function that grabs the currentChapter.text, splits it by periods ., and highlights the current sentence in the UI.
+
+Phase 5: The "Store" (Download Manager)
+Goal: Let users download new voices.
+
+Voice Market Page:
+
+Create a JSON list of available models (name, image, HuggingFace URL).
+
+Map through this list to display "cards" in your UI.
+
+Download Logic (Main Process):
+
+In src/main/index.ts, add a handler ipcMain.on('download-model', ...).
+
+Use a library like axios or electron-dl to download the file from the URL to app.getPath('userData') + /models.
+
+Update Python:
+
+Modify your Python script to look in that specific userData folder to find the .onnx files.
+
+Phase 6: Polish & Persistence
+Goal: Save user preferences.
+
+Install Electron Store: npm install electron-store.
+
+Save Data:
+
+When a user opens a book, save { bookId: '123', lastLocation: 'chapter-4' }.
+
+When they re-open the app, load this data to resume where they left off.
