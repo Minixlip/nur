@@ -1,60 +1,55 @@
-type NavLinks = {
-  key: string
-  value: string
-  icon?: React.JSX.Element
-}
+import { NavLink } from 'react-router-dom'
+/* Icons */
+import { RiBookShelfLine } from 'react-icons/ri'
+import { TiMicrophoneOutline } from 'react-icons/ti'
+import { TbSettings } from 'react-icons/tb'
+import { PiDownloadSimple } from 'react-icons/pi'
 
-export default function Navbar({
-  navLinks,
-  selectedNav,
-  setSelectedNav
-}: {
-  navLinks: NavLinks[]
-  selectedNav: string
-  setSelectedNav: (nav: string) => void
-}): React.JSX.Element {
-  const mockRecentReads = [
-    { title: 'Book One', author: 'Author A' },
-    { title: 'Book Two', author: 'Author B' },
-    { title: 'Book Three', author: 'Author C' }
+export default function Navbar(): React.JSX.Element {
+  // 1. Define links here (or import from a config file)
+  const navLinks = [
+    { path: '/', label: 'Library', icon: <RiBookShelfLine /> },
+    { path: '/voice-market', label: 'Voice Market', icon: <TiMicrophoneOutline /> },
+    { path: '/downloads', label: 'Downloads', icon: <PiDownloadSimple /> },
+    { path: '/settings', label: 'Settings', icon: <TbSettings /> }
   ]
 
-  const isDownloading = true // Mock downloading state
+  const mockRecentReads = [
+    { title: 'Book One', author: 'Author A' },
+    { title: 'Book Two', author: 'Author B' }
+  ]
 
   return (
-    <div className="min-h-screen md:w-64 w-[20%] bg-neutral-500">
-      {/* Navbar*/}
-      <ul className="p-4">
-        {navLinks.map(({ key, value, icon }) => (
-          <li key={key} className="mb-2">
-            <button
-              onClick={() => setSelectedNav(value)}
-              className={`w-full text-left px-4 py-2 rounded cursor-pointer flex gap-2 items-center justify-center${
-                selectedNav === value
-                  ? 'bg-neutral-700 text-white'
-                  : 'text-white hover:bg-neutral-700'
-              }`}
+    <div className="min-h-screen md:w-64 w-[20%] bg-neutral-500 flex flex-col">
+      {/* 2. Navigation Links */}
+      <ul className="p-4 flex-1">
+        {navLinks.map(({ path, label, icon }) => (
+          <li key={path} className="mb-2">
+            <NavLink
+              to={path}
+              className={({ isActive }) =>
+                `w-full text-left px-4 py-2 rounded cursor-pointer flex gap-2 items-center justify-center md:justify-start ${
+                  isActive
+                    ? 'bg-neutral-700 text-white' // Active Style
+                    : 'text-white hover:bg-neutral-700' // Inactive Style
+                }`
+              }
             >
-              <span>{icon}</span>
-              <span className="md:flex hidden">{value}</span>
-            </button>
+              <span className="text-xl">{icon}</span>
+              <span className="md:block hidden">{label}</span>
+            </NavLink>
           </li>
         ))}
       </ul>
-      {/* Downloading Indicator */}
-      {isDownloading && (
-        <div className="bg-yellow-500 text-black p-2 m-4 rounded text-center overflow-hidden">
-          Downloading...
-        </div>
-      )}
-      {/* Recent Reads */}
-      <div className="flex flex-col gap-6">
-        <h2 className="text-white text-lg px-4">Recent Reads</h2>
+
+      {/* 3. Footer / Recent Reads (kept from your original design) */}
+      <div className="flex flex-col gap-6 pb-6">
+        <h2 className="text-white text-lg px-4 hidden md:block">Recent Reads</h2>
         <div className="flex flex-col gap-4 px-4">
           {mockRecentReads.map((book, index) => (
-            <div key={index} className="bg-neutral-600 text-white p-2 rounded">
-              <h3 className="font-semibold">{book.title}</h3>
-              <p className="text-sm">{book.author}</p>
+            <div key={index} className="bg-neutral-600 text-white p-2 rounded hidden md:block">
+              <h3 className="font-semibold text-sm">{book.title}</h3>
+              <p className="text-xs text-gray-300">{book.author}</p>
             </div>
           ))}
         </div>
