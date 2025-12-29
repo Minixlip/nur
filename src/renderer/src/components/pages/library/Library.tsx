@@ -3,33 +3,18 @@ import { useState } from 'react'
 export default function Library(): React.JSX.Element {
   const [status, setStatus] = useState('Idle')
 
-  const testVoice = async (): Promise<void> => {
+  // Example usage in your React component:
+  const handleSpeak = async (): Promise<void> => {
     try {
-      setStatus('Generating...')
+      const result = await window.api.generateSpeech('Hello world, this is a test.', '')
+      // The second argument "" is ignored by our new backend handler
 
-      // CHANGE THIS PATH to the actual path of the .onnx file on your computer
-      // For this test, just put the absolute path (e.g., "C:/Users/You/Downloads/...")
-      const modelPath =
-        '/Users/mo/Desktop/projects/electron/nur/nur/python_backend/vits-piper-en_US-amy-low.onnx'
-
-      // 1. Request Audio
-      const audioPath = await window.api.generateSpeech(
-        'Welcome to Nur Reader. Phase 3 is complete.',
-        modelPath
-      )
-
-      setStatus('Playing...')
-      console.log('Audio received:', audioPath)
-
-      // 2. Play Audio
-      // We need to convert the file path to a URL for the browser to play it
-      const audio = new Audio(`file://${audioPath}`)
-      audio.play()
-
-      audio.onended = () => setStatus('Idle')
-    } catch (e) {
-      console.error(e)
-      setStatus('Error: ' + e)
+      if (result.status === 'success') {
+        const audio = new Audio(result.audio_filepath)
+        audio.play()
+      }
+    } catch (error) {
+      console.error('Speaking failed:', error)
     }
   }
 
@@ -42,7 +27,7 @@ export default function Library(): React.JSX.Element {
         <p className="mb-4 text-gray-400">Status: {status}</p>
 
         <button
-          onClick={testVoice}
+          onClick={handleSpeak}
           className="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold"
         >
           Test "Amy" Voice
