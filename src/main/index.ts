@@ -5,6 +5,8 @@ import icon from '../../resources/icon.png?asset'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { net } from 'electron'
+import { exec } from 'child_process' // <--- Import this to run system commands
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -16,7 +18,7 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      webSecurity: false // Optional: Helps if you have issues loading local audio files
+      webSecurity: false
     }
   })
 
@@ -36,58 +38,90 @@ function createWindow(): void {
   }
 }
 
-// --- NEW TTS HANDLER ---
-// This listens for the frontend command and talks to your Python Server
+// --- NATIVE AUDIO HANDLER ---
 ipcMain.handle('tts:speak', async (_event, { text }) => {
-  try {
-    console.log(`[Main] TTS Request received: "${text.substring(0, 20)}..."`)
+  console.log(`[Main] TTS Request for: "${text.substring(0, 20)}..."`)
 
-    // 1. Send request to your local Python Server (XTTS)
-    // Ensure your python server is running on port 8000!
-    const response = await fetch('http://127.0.0.1:8000/tts', {
+  return new Promise((resolve, reject) => {
+    // 1. Request Audio from Python
+    const request = net.request({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: text,
-        speaker_wav: 'default_speaker.wav', // Matches the file in your nur_backend folder
-        language: 'en'
+      protocol: 'http:',
+      hostname: '127.0.0.1',
+      port: 8000,
+      path: '/tts'
+    })
+
+    request.setHeader('Content-Type', 'application/json')
+
+    request.on('response', (response) => {
+      if (response.statusCode !== 200) {
+        reject(`Python Server Error: ${response.statusCode}`)
+        return
+      }
+
+      const chunks: Buffer[] = []
+
+      response.on('data', (chunk) => {
+        chunks.push(chunk)
+      })
+
+      response.on('end', () => {
+        const buffer = Buffer.concat(chunks)
+        const uniqueId = Date.now().toString()
+        const tempPath = path.join(os.tmpdir(), `nur_speech_${uniqueId}.wav`)
+
+        try {
+          fs.writeFileSync(tempPath, buffer)
+          console.log(`[Main] Audio saved to: ${tempPath}`)
+
+          // 2. FORCE PLAYBACK NATIVELY (Bypass Frontend)
+          console.log("[Main] Attempting to play via 'afplay'...")
+
+          exec(`afplay "${tempPath}"`, (error, stdout, stderr) => {
+            if (error) {
+              console.error(`[Main] Playback failed: ${error.message}`)
+            } else {
+              console.log('[Main] Playback finished successfully.')
+            }
+            // We delete the file after playing to keep things clean
+            fs.unlink(tempPath, () => {})
+          })
+
+          // 3. Tell Frontend we started
+          resolve({ status: 'success', audio_filepath: tempPath })
+        } catch (err) {
+          reject(`File Error: ${err}`)
+        }
+      })
+
+      response.on('error', (err) => {
+        reject(`Stream Error: ${err}`)
       })
     })
 
-    if (!response.ok) {
-      throw new Error(`Python Server Error: ${response.status} ${response.statusText}`)
-    }
+    request.on('error', (err) => {
+      reject(`Connection Error: ${err.message}`)
+    })
 
-    // 2. Convert the response (audio blob) into a buffer
-    const arrayBuffer = await response.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    request.write(
+      JSON.stringify({
+        text: text,
+        speaker_wav: 'default_speaker.wav',
+        language: 'en'
+      })
+    )
 
-    // 3. Save to a temporary file with a unique name (prevents caching issues)
-    const uniqueId = Date.now().toString()
-    const filename = `nur_speech_${uniqueId}.wav`
-    const tempPath = path.join(os.tmpdir(), filename)
-
-    fs.writeFileSync(tempPath, buffer)
-    console.log(`[Main] Audio saved to: ${tempPath}`)
-
-    // 4. Return the file path to the frontend
-    return { status: 'success', audio_filepath: tempPath }
-  } catch (error: any) {
-    console.error('[Main] TTS Failed:', error)
-    return { status: 'error', message: error.message || String(error) }
-  }
+    request.end()
+  })
 })
-// -----------------------
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
-
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
-
   createWindow()
-
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -98,3 +132,5 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
+// In this file you can include the rest of your app's specific main process
+// code. You can also put them in separate files and require them here.
