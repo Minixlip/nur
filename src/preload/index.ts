@@ -4,13 +4,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 // Custom APIs for renderer
 const api = {
   // The frontend will call this function
-  generateSpeech: (text: string, modelPath: string): Promise<string> => {
-    return ipcRenderer.invoke('tts:speak', {
-      text,
-      model_path: modelPath,
-      // For now, we assume tokens is in the same folder as model, or hardcode it
-      tokens_path: modelPath.replace('.onnx', '.tokens') // Simple logic for now
-    })
+  generateSpeech: (text: string): Promise<any> => {
+    return ipcRenderer.invoke('tts:speak', { text })
   }
 }
 
