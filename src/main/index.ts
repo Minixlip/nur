@@ -6,7 +6,9 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { net } from 'electron'
-import { exec } from 'child_process' // <--- Import this to run system commands
+import { exec, ChildProcess } from 'child_process'
+
+let currentPlayer: ChildProcess | null = null
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -38,15 +40,11 @@ function createWindow(): void {
   }
 }
 
-// --- NATIVE AUDIO HANDLER ---
-// ... inside src/main/index.ts
-
-// --- CROSS-PLATFORM AUDIO HANDLER ---
-ipcMain.handle('tts:speak', async (_event, { text }) => {
-  console.log(`[Main] TTS Request for: "${text.substring(0, 20)}..."`)
+// 1. GENERATE ONLY (Does not play)
+ipcMain.handle('tts:generate', async (_event, { text }) => {
+  console.log(`[Main] Generating audio for: "${text.substring(0, 15)}..."`)
 
   return new Promise((resolve, reject) => {
-    // 1. Request Audio from Python
     const request = net.request({
       method: 'POST',
       protocol: 'http:',
@@ -59,7 +57,7 @@ ipcMain.handle('tts:speak', async (_event, { text }) => {
 
     request.on('response', (response) => {
       if (response.statusCode !== 200) {
-        reject(`Python Server Error: ${response.statusCode}`)
+        reject(`Python Error: ${response.statusCode}`)
         return
       }
 
@@ -68,50 +66,19 @@ ipcMain.handle('tts:speak', async (_event, { text }) => {
 
       response.on('end', () => {
         const buffer = Buffer.concat(chunks)
-        const uniqueId = Date.now().toString()
-        const tempPath = path.join(os.tmpdir(), `nur_speech_${uniqueId}.wav`)
+        const uniqueId = Date.now().toString() + Math.random().toString().slice(2, 5)
+        const tempPath = path.join(os.tmpdir(), `nur_seg_${uniqueId}.wav`)
 
         try {
           fs.writeFileSync(tempPath, buffer)
-          console.log(`[Main] Audio saved: ${tempPath}`)
-
-          // 2. PLAY AUDIO (Cross-Platform)
-          const platform = process.platform
-          let playCommand = ''
-
-          if (platform === 'darwin') {
-            // macOS
-            playCommand = `afplay "${tempPath}"`
-          } else if (platform === 'win32') {
-            // Windows (PowerShell)
-            playCommand = `powershell -c (New-Object Media.SoundPlayer '${tempPath}').PlaySync();`
-          } else {
-            // Linux (ALSA)
-            playCommand = `aplay "${tempPath}"`
-          }
-
-          console.log(`[Main] Playing with command: ${playCommand}`)
-
-          exec(playCommand, (error) => {
-            if (error) {
-              console.error(`[Main] Playback failed: ${error.message}`)
-              reject(error.message)
-            } else {
-              console.log('[Main] Playback finished.')
-              // Cleanup file after playing
-              fs.unlink(tempPath, () => {})
-              resolve({ status: 'success', audio_filepath: tempPath })
-            }
-          })
+          resolve({ status: 'success', audio_filepath: tempPath })
         } catch (err) {
-          reject(`File Error: ${err}`)
+          reject(`File Write Error: ${err}`)
         }
       })
     })
 
-    request.on('error', (err) => {
-      reject(`Connection Error: ${err.message}`)
-    })
+    request.on('error', (err) => reject(err.message))
 
     request.write(
       JSON.stringify({
@@ -123,6 +90,58 @@ ipcMain.handle('tts:speak', async (_event, { text }) => {
 
     request.end()
   })
+})
+
+// 2. PLAY FILE (Native)
+ipcMain.handle('audio:play', async (_event, { filepath }) => {
+  return new Promise((resolve, reject) => {
+    // Stop any currently playing audio first
+    if (currentPlayer) {
+      try {
+        currentPlayer.kill()
+      } catch (e) {}
+    }
+
+    const platform = process.platform
+    let playCommand = ''
+    let playArgs: string[] = []
+    let command = ''
+
+    if (platform === 'darwin') {
+      command = 'afplay'
+      playArgs = [filepath]
+    } else if (platform === 'win32') {
+      command = 'powershell'
+      playArgs = ['-c', `(New-Object Media.SoundPlayer '${filepath}').PlaySync();`]
+    } else {
+      command = 'aplay'
+      playArgs = [filepath]
+    }
+
+    console.log(`[Main] Playing: ${filepath}`)
+
+    currentPlayer = exec(`${command} ${playArgs.join(' ')}`, (error) => {
+      currentPlayer = null // Reset when done
+      if (error && !error.killed) {
+        console.error(`[Main] Play error: ${error.message}`)
+        reject(error.message)
+      } else {
+        // Clean up file after playing
+        fs.unlink(filepath, () => {})
+        resolve('done')
+      }
+    })
+  })
+})
+
+// 3. STOP PLAYBACK
+ipcMain.handle('audio:stop', async () => {
+  if (currentPlayer) {
+    console.log('[Main] Stopping playback...')
+    currentPlayer.kill()
+    currentPlayer = null
+  }
+  return true
 })
 
 app.whenReady().then(() => {
@@ -137,9 +156,5 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  if (process.platform !== 'darwin') app.quit()
 })
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
