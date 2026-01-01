@@ -3,9 +3,7 @@ import React, { useState } from 'react'
 export default function Voice(): React.JSX.Element {
   const [status, setStatus] = useState('Idle')
 
-  const story: string =
-    'The town of Alderwick always smelled like rain, even on days when the sky was perfectly clear. Cobblestone streets wound between crooked houses that leaned together as if sharing secrets, their windows glowing softly at dusk. Elias walked slowly, his boots echoing in the quiet, a folded letter tucked deep inside his coat. He had read it a dozen times already, yet each step made its words feel heavier. At the edge of town stood the old clocktower, frozen at five minutes past midnight since anyone could remember. People said time behaved strangely there—that memories lingered longer, and promises made nearby had a way of coming true. Elias stopped beneath its shadow, looked up at the cracked clock face, and wondered whether this would be the night Alderwick finally decided to change him, too.'
-
+  const story: string = 'This a test one two three'
   const handleTest = async (): Promise<void> => {
     setStatus('Requesting Audio...')
     try {

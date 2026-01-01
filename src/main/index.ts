@@ -39,6 +39,9 @@ function createWindow(): void {
 }
 
 // --- NATIVE AUDIO HANDLER ---
+// ... inside src/main/index.ts
+
+// --- CROSS-PLATFORM AUDIO HANDLER ---
 ipcMain.handle('tts:speak', async (_event, { text }) => {
   console.log(`[Main] TTS Request for: "${text.substring(0, 20)}..."`)
 
@@ -61,10 +64,7 @@ ipcMain.handle('tts:speak', async (_event, { text }) => {
       }
 
       const chunks: Buffer[] = []
-
-      response.on('data', (chunk) => {
-        chunks.push(chunk)
-      })
+      response.on('data', (chunk) => chunks.push(chunk))
 
       response.on('end', () => {
         const buffer = Buffer.concat(chunks)
@@ -73,30 +73,39 @@ ipcMain.handle('tts:speak', async (_event, { text }) => {
 
         try {
           fs.writeFileSync(tempPath, buffer)
-          console.log(`[Main] Audio saved to: ${tempPath}`)
+          console.log(`[Main] Audio saved: ${tempPath}`)
 
-          // 2. FORCE PLAYBACK NATIVELY (Bypass Frontend)
-          console.log("[Main] Attempting to play via 'afplay'...")
+          // 2. PLAY AUDIO (Cross-Platform)
+          const platform = process.platform
+          let playCommand = ''
 
-          exec(`afplay "${tempPath}"`, (error, stdout, stderr) => {
+          if (platform === 'darwin') {
+            // macOS
+            playCommand = `afplay "${tempPath}"`
+          } else if (platform === 'win32') {
+            // Windows (PowerShell)
+            playCommand = `powershell -c (New-Object Media.SoundPlayer '${tempPath}').PlaySync();`
+          } else {
+            // Linux (ALSA)
+            playCommand = `aplay "${tempPath}"`
+          }
+
+          console.log(`[Main] Playing with command: ${playCommand}`)
+
+          exec(playCommand, (error) => {
             if (error) {
               console.error(`[Main] Playback failed: ${error.message}`)
+              reject(error.message)
             } else {
-              console.log('[Main] Playback finished successfully.')
+              console.log('[Main] Playback finished.')
+              // Cleanup file after playing
+              fs.unlink(tempPath, () => {})
+              resolve({ status: 'success', audio_filepath: tempPath })
             }
-            // We delete the file after playing to keep things clean
-            fs.unlink(tempPath, () => {})
           })
-
-          // 3. Tell Frontend we started
-          resolve({ status: 'success', audio_filepath: tempPath })
         } catch (err) {
           reject(`File Error: ${err}`)
         }
-      })
-
-      response.on('error', (err) => {
-        reject(`Stream Error: ${err}`)
       })
     })
 
