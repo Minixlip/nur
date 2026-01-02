@@ -6,15 +6,17 @@ const DEFAULT_PAGES = [
   `You can select any .epub file. The AI will extract text and images, reading it aloud continuously.`
 ]
 
-// Define the shape of our new visual structure
 export interface VisualBlock {
   type: 'paragraph' | 'image'
-  content: string[] // Array of sentences in this paragraph
-  startIndex: number // Global index where this block starts
+  content: string[]
+  startIndex: number
 }
 
+// CONFIG: How much text fits on one screen?
+const CHARS_PER_PAGE = 1500
+
 export function useBookImporter() {
-  const [bookPages, setBookPages] = useState<string[]>(DEFAULT_PAGES)
+  const [rawChapters, setRawChapters] = useState<string[]>(DEFAULT_PAGES)
   const [bookTitle, setBookTitle] = useState('Nur Reader')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,10 +41,9 @@ export function useBookImporter() {
       await book.ready
 
       const metadata = await book.loaded.metadata
-      const title = metadata.title || 'Unknown Book'
-      setBookTitle(title)
+      setBookTitle(metadata.title || 'Unknown Book')
 
-      const newPages: string[] = []
+      const newChapters: string[] = []
       // @ts-expect-error
       const spineItems = book.spine.spineItems as any[]
 
@@ -106,29 +107,26 @@ export function useBookImporter() {
                 return
               }
 
-              // FIX: Removed the aggressive Drop Cap regex that was breaking "I heard" -> "Iheard"
-              // Only normalize multiple spaces
               text = text.replace(/\s+/g, ' ')
-
               contentParts.push(text)
             })
           } else {
             contentParts.push(dom.body.textContent || '')
           }
 
-          let fullText = contentParts.join('\n\n') // Preserve structure
+          let fullText = contentParts.join('\n\n')
           const cleanText = fullText.trim()
 
           if (cleanText.length > 20 || cleanText.includes('[[[IMG_MARKER')) {
-            newPages.push(cleanText)
+            newChapters.push(cleanText)
           }
         } catch (err) {
           console.warn(err)
         }
       }
 
-      if (newPages.length > 0) {
-        setBookPages(newPages)
+      if (newChapters.length > 0) {
+        setRawChapters(newChapters)
       } else {
         setError('Error: No content found')
       }
@@ -140,38 +138,38 @@ export function useBookImporter() {
     }
   }
 
-  // --- 2. STRUCTURE PARSING ---
+  // --- 2. STRUCTURE & PAGINATION ENGINE ---
   const bookStructure = useMemo(() => {
     const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
     const allSentences: string[] = []
     const sentenceToPageMap: number[] = []
 
-    // This holds the visual layout: Array of Pages -> Array of Blocks
+    // Instead of Chapters, we now have "Virtual Pages"
     const pagesStructure: VisualBlock[][] = []
 
-    bookPages.forEach((pageText, pageIndex) => {
-      const pageBlocks: VisualBlock[] = []
+    let globalSentenceIndex = 0
 
-      // 1. Split by "Blocks" (Paragraphs or Images)
-      const rawBlocks = pageText.split(/(\[\[\[IMG_MARKER:.*?\]\]\]|\n\n)/g)
+    // Iterate through real Chapters
+    rawChapters.forEach((chapterText) => {
+      // 1. Break Chapter into Blocks
+      const rawBlocks = chapterText.split(/(\[\[\[IMG_MARKER:.*?\]\]\]|\n\n)/g)
+      const chapterBlocks: VisualBlock[] = []
 
       rawBlocks.forEach((blockText) => {
         const trimmed = blockText.trim()
         if (!trimmed) return
 
-        const currentStartIndex = allSentences.length
-
         if (trimmed.startsWith('[[[IMG_MARKER')) {
           // IMAGE BLOCK
-          allSentences.push(trimmed)
-          sentenceToPageMap.push(pageIndex)
-          pageBlocks.push({
+          chapterBlocks.push({
             type: 'image',
             content: [trimmed],
-            startIndex: currentStartIndex
+            startIndex: globalSentenceIndex
           })
+          allSentences.push(trimmed)
+          globalSentenceIndex++
         } else {
-          // TEXT PARAGRAPH BLOCK
+          // TEXT BLOCK
           const rawSegments = [...segmenter.segment(trimmed)].map((s) => s.segment)
           const blockSentences: string[] = []
           let buffer = ''
@@ -188,27 +186,62 @@ export function useBookImporter() {
           }
           if (buffer) blockSentences.push(buffer.trim())
 
-          // Add to global lists
           if (blockSentences.length > 0) {
-            allSentences.push(...blockSentences)
-            blockSentences.forEach(() => sentenceToPageMap.push(pageIndex))
-
-            pageBlocks.push({
+            chapterBlocks.push({
               type: 'paragraph',
               content: blockSentences,
-              startIndex: currentStartIndex
+              startIndex: globalSentenceIndex
             })
+            allSentences.push(...blockSentences)
+            globalSentenceIndex += blockSentences.length
           }
         }
       })
-      pagesStructure.push(pageBlocks)
+
+      // 2. PAGINATE THE BLOCKS
+      // We accumulate blocks until we hit CHARS_PER_PAGE, then start a new page
+      let currentPage: VisualBlock[] = []
+      let currentLength = 0
+
+      chapterBlocks.forEach((block) => {
+        const blockLength = block.content.join(' ').length
+
+        // If adding this block exceeds limit (and page isn't empty), push page
+        if (currentLength + blockLength > CHARS_PER_PAGE && currentPage.length > 0) {
+          pagesStructure.push(currentPage)
+
+          // Map sentences to this new page index
+          const pageIndex = pagesStructure.length - 1
+          currentPage.forEach((b) => {
+            // Each sentence in this block belongs to 'pageIndex'
+            for (let i = 0; i < b.content.length; i++) sentenceToPageMap.push(pageIndex)
+          })
+
+          // Reset
+          currentPage = []
+          currentLength = 0
+        }
+
+        currentPage.push(block)
+        currentLength += blockLength
+      })
+
+      // Push remaining blocks
+      if (currentPage.length > 0) {
+        pagesStructure.push(currentPage)
+        const pageIndex = pagesStructure.length - 1
+        currentPage.forEach((b) => {
+          for (let i = 0; i < b.content.length; i++) sentenceToPageMap.push(pageIndex)
+        })
+      }
     })
 
     return { allSentences, sentenceToPageMap, pagesStructure }
-  }, [bookPages])
+  }, [rawChapters])
 
   return {
-    bookPages,
+    bookPages: rawChapters, // Kept for reference if needed
+    totalPages: bookStructure.pagesStructure.length, // EXPOSE TOTAL PAGES
     bookTitle,
     isLoading,
     error,
