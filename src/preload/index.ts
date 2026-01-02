@@ -2,12 +2,14 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
-  // Passes text AND speed to the main process
   generate: (text: string, speed: number = 1.0) =>
     ipcRenderer.invoke('tts:generate', { text, speed }),
   loadAudio: (filepath: string) => ipcRenderer.invoke('audio:load', { filepath }),
   play: (filepath: string) => ipcRenderer.invoke('audio:play', { filepath }),
-  stop: () => ipcRenderer.invoke('audio:stop')
+  stop: () => ipcRenderer.invoke('audio:stop'),
+  // NEW:
+  openFileDialog: () => ipcRenderer.invoke('dialog:openFile'),
+  readFile: (filepath: string) => ipcRenderer.invoke('fs:readFile', { filepath })
 }
 
 if (process.contextIsolated) {

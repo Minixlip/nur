@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron' // <--- Added dialog
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -40,7 +40,22 @@ function createWindow(): void {
   }
 }
 
-// 1. GENERATE AUDIO (In-Memory Optimization)
+// --- NEW: FILE DIALOG HANDLER ---
+ipcMain.handle('dialog:openFile', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'EPUB Books', extensions: ['epub'] }]
+  })
+  if (canceled) {
+    return null
+  } else {
+    // Return the path so frontend can read it
+    return filePaths[0]
+  }
+})
+// --------------------------------
+
+// 1. GENERATE AUDIO
 ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
   const safeSpeed = speed || 1.0
   console.log(`[Main] Requesting: "${text.substring(0, 10)}..."`)
@@ -61,25 +76,11 @@ ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
         reject(`Python Error: ${response.statusCode}`)
         return
       }
-
       const chunks: Buffer[] = []
       response.on('data', (chunk) => chunks.push(chunk))
-
       response.on('end', () => {
         const buffer = Buffer.concat(chunks)
-
-        // OPTIMIZATION: Do NOT write to file.
-        // We return the buffer directly.
-        // Note: Electron cannot send a raw "Buffer" object over IPC easily in some versions,
-        // so we convert it to a format the frontend can easily read (Base64 or Uint8Array).
-        // However, Electron's 'invoke' handles Buffers reasonably well in modern versions.
-
-        // We return a "virtual" path or ID so the frontend logic remains consistent,
-        // OR we just return the data. Let's return the data directly.
-        resolve({
-          status: 'success',
-          audio_data: buffer // Sending raw RAM buffer
-        })
+        resolve({ status: 'success', audio_data: buffer })
       })
     })
 
@@ -98,7 +99,7 @@ ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
   })
 })
 
-// 2. PLAY FILE (Native Fallback)
+// 2. PLAY FILE (Native Fallback - mostly unused now due to Web Audio)
 ipcMain.handle('audio:play', async (_event, { filepath }) => {
   return new Promise((resolve, reject) => {
     if (currentPlayer) {
@@ -106,10 +107,8 @@ ipcMain.handle('audio:play', async (_event, { filepath }) => {
         currentPlayer.kill()
       } catch (e) {}
     }
-
     const platform = process.platform
     let fullCommand = ''
-
     if (platform === 'darwin') {
       fullCommand = `afplay "${filepath}"`
     } else if (platform === 'win32') {
@@ -118,7 +117,6 @@ ipcMain.handle('audio:play', async (_event, { filepath }) => {
     } else {
       fullCommand = `aplay "${filepath}"`
     }
-
     currentPlayer = exec(fullCommand, (error) => {
       currentPlayer = null
       if (error && !error.killed) {
@@ -140,11 +138,10 @@ ipcMain.handle('audio:stop', async () => {
   return true
 })
 
-// 4. LOAD AUDIO FILE (For Frontend Gapless Playback)
+// 4. LOAD AUDIO FILE
 ipcMain.handle('audio:load', async (_event, { filepath }) => {
   try {
     const buffer = fs.readFileSync(filepath)
-    // Clean up file immediately after reading into memory
     try {
       fs.unlinkSync(filepath)
     } catch (e) {}
@@ -153,6 +150,11 @@ ipcMain.handle('audio:load', async (_event, { filepath }) => {
     console.error(`[Main] Failed to load audio: ${err.message}`)
     throw err
   }
+})
+
+// 5. READ FILE (To load EPUB data into memory)
+ipcMain.handle('fs:readFile', async (_event, { filepath }) => {
+  return fs.readFileSync(filepath) // Returns buffer
 })
 
 app.whenReady().then(() => {

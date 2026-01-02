@@ -1,16 +1,21 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
+import ePub from 'epubjs'
 
-const BOOK_PAGES = [
-  `I still remember the day my father took me to the Cemetery of Forgotten Books for the first time. It was the early summer of 1945, and we walked through the streets of a Barcelona trapped beneath ashen skies as a dawn of mist poured over the Rambla de Santa Mónica.`,
-  `"Daniel, you mustn't tell anyone what you're about to see today," my father warned. "No one." "Not even my friend Bernat?" "No one," he said, smoothing his hat. "This is a place of mystery, Daniel, a sanctuary."`,
-  `Every book, every volume you see here, has a soul. The soul of the person who wrote it and of those who read it and lived and dreamed with it. Every time a book changes hands, every time someone runs his eyes down its pages, its spirit grows and strengthens.`
+// --- DEFAULT STATE ---
+const DEFAULT_PAGES = [
+  `Welcome to Nur Reader. To begin, please click the "Import Book" button.`,
+  `You can select any .epub file. The AI will extract text and images, reading it aloud continuously.`
 ]
 
 export default function Library(): React.JSX.Element {
+  const [bookPages, setBookPages] = useState<string[]>(DEFAULT_PAGES)
+  const [bookTitle, setBookTitle] = useState('Nur Reader')
+
   const [isPlaying, setIsPlaying] = useState(false)
   const [globalSentenceIndex, setGlobalSentenceIndex] = useState(-1)
   const [status, setStatus] = useState('Idle')
   const [visualPageIndex, setVisualPageIndex] = useState(0)
+  const [isLoadingBook, setIsLoadingBook] = useState(false)
 
   const isPlayingRef = useRef(false)
   const stopSignalRef = useRef(false)
@@ -19,34 +24,150 @@ export default function Library(): React.JSX.Element {
   const scheduledNodesRef = useRef<AudioBufferSourceNode[]>([])
   const playbackTimeoutsRef = useRef<NodeJS.Timeout[]>([])
 
+  // --- 1. HYBRID IMPORTER (Robust Text + Images) ---
+  const handleImportBook = async () => {
+    try {
+      // @ts-ignore
+      const filePath = await window.api.openFileDialog()
+      if (!filePath) return
+
+      setStatus('Loading Book...')
+      setIsLoadingBook(true)
+      handleStop()
+
+      // @ts-ignore
+      const fileBuffer = await window.api.readFile(filePath)
+      const rawData = new Uint8Array(fileBuffer)
+      const cleanBuffer = rawData.buffer.slice(
+        rawData.byteOffset,
+        rawData.byteOffset + rawData.byteLength
+      )
+
+      const book = ePub(cleanBuffer)
+      await book.ready
+      const metadata = await book.loaded.metadata
+      setBookTitle(metadata.title || 'Unknown Book')
+
+      const newPages: string[] = []
+      // @ts-ignore
+      const spineItems = book.spine.spineItems
+
+      console.log(`[Importer] Found ${spineItems.length} chapters.`)
+
+      for (let i = 0; i < spineItems.length; i++) {
+        const item = spineItems[i]
+        try {
+          const target = item.href || item.canonical
+          if (!target) continue
+
+          const doc = await book.load(target)
+
+          let dom: Document
+          if (typeof doc === 'string') {
+            const parser = new DOMParser()
+            dom = parser.parseFromString(doc, 'application/xhtml+xml')
+          } else {
+            dom = doc as Document
+          }
+
+          // Remove Junk
+          dom.querySelectorAll('style, script, link').forEach((el) => el.remove())
+
+          // Extract Images
+          const images = Array.from(dom.querySelectorAll('img, image'))
+          for (const img of images) {
+            const src = img.getAttribute('src') || img.getAttribute('href') || ''
+            if (src) {
+              try {
+                // @ts-ignore
+                const absolute = book.path.resolve(src, item.href)
+                const url = await book.archive.createUrl(absolute)
+                const marker = ` [[[IMG_MARKER:${url}]]] `
+                const textNode = document.createTextNode(marker)
+                img.parentNode?.replaceChild(textNode, img)
+              } catch (err) {
+                console.warn('Image error:', err)
+              }
+            }
+          }
+
+          const rawString = new XMLSerializer().serializeToString(dom)
+          // Nuclear Regex: Kill tags, keep brackets
+          let text = rawString.replace(/<[^>]+>/g, ' ')
+
+          const txt = document.createElement('textarea')
+          txt.innerHTML = text
+          text = txt.value
+
+          const cleanText = text.replace(/\s+/g, ' ').trim()
+
+          if (cleanText.length > 20 || cleanText.includes('[[[IMG_MARKER')) {
+            newPages.push(cleanText)
+          }
+        } catch (err) {
+          console.warn(`[Importer] Failed chapter ${i}:`, err)
+        }
+      }
+
+      if (newPages.length > 0) {
+        setBookPages(newPages)
+        setVisualPageIndex(0)
+        setStatus('Book Loaded')
+      } else {
+        setStatus('Error: No content found')
+      }
+    } catch (e: any) {
+      console.error(e)
+      setStatus('Import Error: ' + e.message)
+    } finally {
+      setIsLoadingBook(false)
+    }
+  }
+
+  // --- 2. SENTENCE PARSING ---
   const bookStructure = useMemo(() => {
     const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
     const allSentences: string[] = []
     const sentenceToPageMap: number[] = []
 
-    BOOK_PAGES.forEach((pageText, pageIndex) => {
-      const rawSegments = [...segmenter.segment(pageText)].map((s) => s.segment)
-      let buffer = ''
-      for (const part of rawSegments) {
-        const trimmed = part.trim()
-        if (!trimmed) continue
-        if ((buffer + ' ' + trimmed).length < 40 || /^[")\]}]+$/.test(trimmed)) {
-          buffer += ' ' + trimmed
+    bookPages.forEach((pageText, pageIndex) => {
+      // Split by markers FIRST to preserve image URLs
+      // Then segment the text parts
+      const parts = pageText.split(/(\[\[\[IMG_MARKER:.*?\]\]\])/g)
+
+      parts.forEach((part) => {
+        if (part.startsWith('[[[IMG_MARKER')) {
+          // It's an image, treat as own sentence
+          allSentences.push(part)
+          sentenceToPageMap.push(pageIndex)
         } else {
+          // It's text, segment it
+          const rawSegments = [...segmenter.segment(part)].map((s) => s.segment)
+          let buffer = ''
+          for (const seg of rawSegments) {
+            const trimmed = seg.trim()
+            if (!trimmed) continue
+
+            // Merge short junk lines
+            if ((buffer + ' ' + trimmed).length < 40 || /^[")\]}]+$/.test(trimmed)) {
+              buffer += ' ' + trimmed
+            } else {
+              if (buffer) {
+                allSentences.push(buffer.trim())
+                sentenceToPageMap.push(pageIndex)
+              }
+              buffer = trimmed
+            }
+          }
           if (buffer) {
             allSentences.push(buffer.trim())
             sentenceToPageMap.push(pageIndex)
           }
-          buffer = trimmed
         }
-      }
-      if (buffer) {
-        allSentences.push(buffer.trim())
-        sentenceToPageMap.push(pageIndex)
-      }
+      })
     })
     return { allSentences, sentenceToPageMap }
-  }, [])
+  }, [bookPages])
 
   const initAudioContext = () => {
     if (!audioCtxRef.current) {
@@ -78,6 +199,7 @@ export default function Library(): React.JSX.Element {
     await window.api.stop()
   }
 
+  // --- 3. ROBUST READ LOGIC ---
   const handleReadBook = async () => {
     if (isPlayingRef.current) return
 
@@ -106,94 +228,130 @@ export default function Library(): React.JSX.Element {
     try {
       setStatus('Buffering...')
 
-      const initialBatch = Math.min(activeSentences.length, BUFFER_SIZE)
-      for (let i = 0; i < initialBatch; i++) {
-        // @ts-ignore
-        audioPromises[i] = window.api.generate(activeSentences[i], 1.2)
+      // --- HELPER: GENERATOR ---
+      const triggerGeneration = (index: number) => {
+        if (index >= activeSentences.length) return
+        const text = activeSentences[index]
+
+        if (text.includes('[[[IMG_MARKER')) {
+          audioPromises[index] = Promise.resolve({ status: 'skipped', audio_data: null })
+        } else {
+          // @ts-ignore
+          audioPromises[index] = window.api.generate(text, 1.2)
+        }
       }
 
+      // 1. Kickstart
+      const initialBatch = Math.min(activeSentences.length, BUFFER_SIZE)
+      for (let i = 0; i < initialBatch; i++) triggerGeneration(i)
+
+      // 2. Wait for startup
       const waitCount = Math.min(activeSentences.length, STARTUP_BUFFER)
       if (waitCount > 0) {
         setStatus(`Buffering ${waitCount} segments...`)
-        await Promise.all(audioPromises.slice(0, waitCount))
+        try {
+          await Promise.all(audioPromises.slice(0, waitCount))
+        } catch (err) {
+          console.error('Startup buffer failed, continuing anyway...', err)
+        }
       }
 
+      // 3. Playback Loop
       for (let i = 0; i < activeSentences.length; i++) {
         if (stopSignalRef.current) break
 
         const globalIndex = getGlobalIndex(i)
 
-        setStatus(`Buffering...`)
+        // Update Status
+        setStatus(`Reading chunk ${i + 1}...`)
 
-        const result = await audioPromises[i]
+        // A. Wait for Audio
+        let result = null
+        try {
+          result = await audioPromises[i]
+        } catch (err) {
+          console.warn(`Request ${i} failed, skipping.`)
+          continue // Skip this sentence if backend failed
+        }
+
         if (stopSignalRef.current) break
 
-        const nextToSchedule = i + BUFFER_SIZE
-        if (nextToSchedule < activeSentences.length && !audioPromises[nextToSchedule]) {
-          // @ts-ignore
-          audioPromises[nextToSchedule] = window.api.generate(activeSentences[nextToSchedule], 1.2)
+        // B. Schedule Next
+        triggerGeneration(i + BUFFER_SIZE)
+
+        // C. Process Result
+        if (result && result.status === 'skipped') {
+          // IMAGE HANDLING
+          setGlobalSentenceIndex(globalIndex)
+          const pageOfThisSentence = bookStructure.sentenceToPageMap[globalIndex]
+          setVisualPageIndex((c) => (c !== pageOfThisSentence ? pageOfThisSentence : c))
+
+          // Pause 2 seconds for image
+          const imagePause = 2.0
+          nextStartTimeRef.current =
+            Math.max(ctx.currentTime, nextStartTimeRef.current) + imagePause
+
+          // Wait loop (don't block thread completely)
+          await new Promise((r) => setTimeout(r, imagePause * 1000))
+          continue
         }
 
         if (result && result.status === 'success') {
-          const cleanBuffer = new Uint8Array(result.audio_data).buffer
-          const audioBuffer = await ctx.decodeAudioData(cleanBuffer)
-          const source = ctx.createBufferSource()
-          source.buffer = audioBuffer
-          source.connect(ctx.destination)
+          try {
+            // DECODE SAFELY
+            const cleanBuffer = new Uint8Array(result.audio_data).buffer
+            const audioBuffer = await ctx.decodeAudioData(cleanBuffer)
 
-          const start = Math.max(ctx.currentTime, nextStartTimeRef.current)
-          source.start(start)
-          scheduledNodesRef.current.push(source)
+            const source = ctx.createBufferSource()
+            source.buffer = audioBuffer
+            source.connect(ctx.destination)
 
-          // --- FIX: DETECT END OF BOOK ---
-          // If this is the LAST sentence in the list, attach an 'onended' listener
-          if (i === activeSentences.length - 1) {
-            source.onended = () => {
-              if (!stopSignalRef.current) {
-                console.log('Book finished naturally.')
-                setIsPlaying(false)
-                isPlayingRef.current = false
-                setStatus('Completed')
-                setGlobalSentenceIndex(-1)
+            const start = Math.max(ctx.currentTime, nextStartTimeRef.current)
+            source.start(start)
+            scheduledNodesRef.current.push(source)
+
+            // End of book check
+            if (i === activeSentences.length - 1) {
+              source.onended = () => {
+                if (!stopSignalRef.current) {
+                  setIsPlaying(false)
+                  isPlayingRef.current = false
+                  setStatus('Completed')
+                  setGlobalSentenceIndex(-1)
+                }
               }
             }
-          }
-          // -------------------------------
 
-          const delayMs = (start - ctx.currentTime) * 1000
+            // UI Sync Timer
+            const delayMs = (start - ctx.currentTime) * 1000
+            const timeoutId = setTimeout(() => {
+              if (!stopSignalRef.current) {
+                setGlobalSentenceIndex(globalIndex)
+                const pageOfThisSentence = bookStructure.sentenceToPageMap[globalIndex]
+                setVisualPageIndex((c) => (c !== pageOfThisSentence ? pageOfThisSentence : c))
+              }
+            }, delayMs)
+            playbackTimeoutsRef.current.push(timeoutId)
 
-          const timeoutId = setTimeout(() => {
-            if (!stopSignalRef.current) {
-              setGlobalSentenceIndex(globalIndex)
-              const pageOfThisSentence = bookStructure.sentenceToPageMap[globalIndex]
-              setVisualPageIndex((current) => {
-                if (current !== pageOfThisSentence) return pageOfThisSentence
-                return current
-              })
+            nextStartTimeRef.current = start + audioBuffer.duration
+
+            // Throttle
+            const timeUntilPlay = start - ctx.currentTime
+            if (timeUntilPlay > 15) {
+              await new Promise((r) => setTimeout(r, (timeUntilPlay - 5) * 1000))
             }
-          }, delayMs)
-
-          playbackTimeoutsRef.current.push(timeoutId)
-
-          nextStartTimeRef.current = start + audioBuffer.duration
-
-          const timeUntilPlay = start - ctx.currentTime
-          if (timeUntilPlay > 15) {
-            await new Promise((r) => setTimeout(r, (timeUntilPlay - 5) * 1000))
+          } catch (decodeErr) {
+            console.error('Audio Decode Failed for chunk ' + i, decodeErr)
+            // Don't stop! Just continue to next sentence
           }
         }
       }
-
-      // We removed setStatus('Finished') from here because the loop finishes BEFORE audio finishes.
-      // The status update now happens in the source.onended callback above.
     } catch (e: any) {
       console.error(e)
       setStatus('Error: ' + e.message)
       setIsPlaying(false)
       isPlayingRef.current = false
     } finally {
-      // Only force stop if the user clicked Stop.
-      // Otherwise let the 'onended' event handle the cleanup.
       if (stopSignalRef.current) {
         setIsPlaying(false)
         isPlayingRef.current = false
@@ -201,25 +359,49 @@ export default function Library(): React.JSX.Element {
     }
   }
 
+  // --- 4. RENDERER ---
   const renderPageContent = () => {
     const pageSentences = bookStructure.allSentences
       .map((text, idx) => ({ text, idx }))
       .filter((item) => bookStructure.sentenceToPageMap[item.idx] === visualPageIndex)
 
+    if (pageSentences.length === 0)
+      return <div className="text-gray-500 italic p-4">Empty Page</div>
+
     return (
       <div className="leading-relaxed text-lg text-gray-300 font-serif">
-        {pageSentences.map((item, localIdx) => (
-          <span
-            key={localIdx}
-            className={`transition-all duration-300 px-1 rounded ${
-              item.idx === globalSentenceIndex && isPlaying
-                ? 'bg-indigo-600/40 text-white shadow-sm box-decoration-clone'
-                : ''
-            }`}
-          >
-            {item.text}{' '}
-          </span>
-        ))}
+        {pageSentences.map((item, localIdx) => {
+          const imgMatch = item.text.match(/\[\[\[IMG_MARKER:(.*?)\]\]\]/)
+
+          if (imgMatch) {
+            const src = imgMatch[1]
+            return (
+              <div
+                key={localIdx}
+                className={`my-6 flex justify-center p-2 rounded transition-all duration-500 ${item.idx === globalSentenceIndex ? 'bg-indigo-900/30 ring-2 ring-indigo-500' : ''}`}
+              >
+                <img
+                  src={src}
+                  alt="Illustration"
+                  className="max-w-full max-h-[500px] rounded shadow-lg"
+                />
+              </div>
+            )
+          }
+
+          return (
+            <span
+              key={localIdx}
+              className={`transition-all duration-300 px-1 rounded ${
+                item.idx === globalSentenceIndex && isPlaying
+                  ? 'bg-indigo-600/40 text-white shadow-sm box-decoration-clone'
+                  : ''
+              }`}
+            >
+              {item.text}{' '}
+            </span>
+          )
+        })}
       </div>
     )
   }
@@ -233,10 +415,17 @@ export default function Library(): React.JSX.Element {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
       <div className="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
-        <h1 className="text-3xl font-bold text-white">My Library</h1>
-        <div className="text-sm font-mono text-gray-400">
-          Status: <span className="text-indigo-400">{status}</span>
+        <div>
+          <h1 className="text-3xl font-bold text-white">My Library</h1>
+          <p className="text-gray-400 text-sm mt-1">{status}</p>
         </div>
+        <button
+          onClick={handleImportBook}
+          disabled={isLoadingBook || isPlaying}
+          className={`px-4 py-2 rounded-lg font-bold shadow-lg transition-all flex items-center gap-2 ${isLoadingBook ? 'bg-gray-700 cursor-wait' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
+        >
+          {isLoadingBook ? 'Parsing...' : '📂 Import .epub'}
+        </button>
       </div>
       <div className="max-w-3xl mx-auto bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700">
         <div className="bg-gray-750 p-4 border-b border-gray-700 flex justify-between items-center backdrop-blur-sm">
@@ -246,23 +435,29 @@ export default function Library(): React.JSX.Element {
               disabled={visualPageIndex === 0}
               className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
             >
-              ← Prev
+              ←
             </button>
-            <span className="font-mono text-gray-400">
-              Page {visualPageIndex + 1} / {BOOK_PAGES.length}
-            </span>
+            <div className="text-center">
+              <div className="font-semibold text-white italic truncate max-w-[200px]">
+                {bookTitle}
+              </div>
+              <div className="text-xs font-mono text-gray-400">
+                Chapter {visualPageIndex + 1} / {bookPages.length}
+              </div>
+            </div>
             <button
-              onClick={() => setVisualPageIndex((p) => Math.min(BOOK_PAGES.length - 1, p + 1))}
-              disabled={visualPageIndex === BOOK_PAGES.length - 1}
+              onClick={() => setVisualPageIndex((p) => Math.min(bookPages.length - 1, p + 1))}
+              disabled={visualPageIndex === bookPages.length - 1}
               className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
             >
-              Next →
+              →
             </button>
           </div>
           <div className="flex gap-2">
             {!isPlaying ? (
               <button
                 onClick={handleReadBook}
+                disabled={bookPages.length === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold shadow-lg transition-all"
               >
                 <span>▶</span> Read
@@ -277,7 +472,7 @@ export default function Library(): React.JSX.Element {
             )}
           </div>
         </div>
-        <div className="p-8 min-h-[400px]">{renderPageContent()}</div>
+        <div className="p-8 min-h-[500px] max-h-[70vh] overflow-y-auto">{renderPageContent()}</div>
       </div>
     </div>
   )
