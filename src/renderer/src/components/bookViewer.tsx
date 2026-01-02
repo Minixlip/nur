@@ -1,22 +1,25 @@
 import React from 'react'
-import { VisualBlock } from '../hooks/useBookImporter'
+import { VisualBlock, TocItem } from '../hooks/useBookImporter'
 
 interface BookViewerProps {
   bookStructure: {
     allSentences: string[]
     sentenceToPageMap: number[]
     pagesStructure: VisualBlock[][]
+    processedToc?: TocItem[] // Add ToC to the data we receive
   }
   visualPageIndex: number
   globalSentenceIndex: number
   isPlaying: boolean
+  onChapterClick: (pageIndex: number) => void // New Handler
 }
 
 export const BookViewer: React.FC<BookViewerProps> = ({
   bookStructure,
   visualPageIndex,
   globalSentenceIndex,
-  isPlaying
+  isPlaying,
+  onChapterClick
 }) => {
   const pageBlocks = bookStructure.pagesStructure[visualPageIndex]
 
@@ -25,9 +28,9 @@ export const BookViewer: React.FC<BookViewerProps> = ({
   }
 
   return (
-    // Added min-h to prevent layout shift
     <div className="max-w-3xl mx-auto min-h-[60vh] flex flex-col justify-start">
       {pageBlocks.map((block, blockIdx) => {
+        // 1. IMAGE BLOCK
         if (block.type === 'image') {
           const srcMatch = block.content[0].match(/\[\[\[IMG_MARKER:(.*?)\]\]\]/)
           const src = srcMatch ? srcMatch[1] : ''
@@ -47,6 +50,30 @@ export const BookViewer: React.FC<BookViewerProps> = ({
           )
         }
 
+        // 2. TEXT BLOCK (PARAGRAPH)
+        const blockText = block.content.join(' ').trim()
+
+        // CHECK: Is this paragraph actually a Chapter Title from the Table of Contents?
+        const tocMatch = bookStructure.processedToc?.find(
+          (item) => item.label.trim().toLowerCase() === blockText.toLowerCase()
+        )
+
+        // 3. RENDER AS LINK (If match found)
+        if (tocMatch) {
+          return (
+            <button
+              key={blockIdx}
+              onClick={() => onChapterClick(tocMatch.pageIndex)}
+              className="w-full text-left mb-4 group"
+            >
+              <span className="text-xl md:text-2xl text-indigo-400 font-serif font-medium hover:text-indigo-300 hover:underline decoration-indigo-500/50 underline-offset-4 transition-all block py-2">
+                {blockText}
+              </span>
+            </button>
+          )
+        }
+
+        // 4. RENDER AS STANDARD TEXT
         return (
           <p
             key={blockIdx}

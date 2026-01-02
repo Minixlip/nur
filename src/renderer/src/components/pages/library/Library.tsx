@@ -130,6 +130,8 @@ export default function Library(): React.JSX.Element {
             visualPageIndex={visualPageIndex}
             globalSentenceIndex={globalSentenceIndex}
             isPlaying={isPlaying}
+            // Add this line:
+            onChapterClick={(pageIndex) => setVisualPageIndex(pageIndex)}
           />
         </div>
       </div>
