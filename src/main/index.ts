@@ -8,7 +8,6 @@ import os from 'os'
 import { net } from 'electron'
 import { exec, ChildProcess } from 'child_process'
 
-// Track the current player process so we can kill it if the user clicks Stop
 let currentPlayer: ChildProcess | null = null
 
 function createWindow(): void {
@@ -41,9 +40,11 @@ function createWindow(): void {
   }
 }
 
+// 1. GENERATE AUDIO (With Speed Control)
 ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
-  // <--- Added speed
-  console.log(`[Main] Generating: "${text.substring(0, 15)}..." at speed ${speed}`)
+  // Default to 1.0 if speed is missing
+  const safeSpeed = speed || 1.0
+  console.log(`[Main] Generating: "${text.substring(0, 15)}..." (Speed: ${safeSpeed})`)
 
   return new Promise((resolve, reject) => {
     const request = net.request({
@@ -55,14 +56,42 @@ ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
     })
 
     request.setHeader('Content-Type', 'application/json')
-    // ... rest of error handling ...
 
+    request.on('response', (response) => {
+      if (response.statusCode !== 200) {
+        reject(`Python Error: ${response.statusCode}`)
+        return
+      }
+
+      const chunks: Buffer[] = []
+      response.on('data', (chunk) => chunks.push(chunk))
+
+      response.on('end', () => {
+        const buffer = Buffer.concat(chunks)
+        const uniqueId = Date.now().toString() + Math.random().toString().slice(2, 5)
+        const tempPath = path.join(os.tmpdir(), `nur_seg_${uniqueId}.wav`)
+
+        try {
+          fs.writeFileSync(tempPath, buffer)
+          resolve({ status: 'success', audio_filepath: tempPath })
+        } catch (err) {
+          reject(`File Write Error: ${err}`)
+        }
+      })
+    })
+
+    request.on('error', (err) => {
+      console.error('[Main] Request Error:', err)
+      reject(err.message)
+    })
+
+    // Send the JSON body with the speed parameter
     request.write(
       JSON.stringify({
         text: text,
         speaker_wav: 'default_speaker.wav',
         language: 'en',
-        speed: speed || 1.2 // Default to 1.2x (Faster generation)
+        speed: safeSpeed
       })
     )
 
@@ -70,10 +99,9 @@ ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
   })
 })
 
-// 2. PLAY FILE (Native & Cross-Platform)
+// 2. PLAY FILE (Native Fallback)
 ipcMain.handle('audio:play', async (_event, { filepath }) => {
   return new Promise((resolve, reject) => {
-    // Safety: Stop any existing audio first
     if (currentPlayer) {
       try {
         currentPlayer.kill()
@@ -83,31 +111,20 @@ ipcMain.handle('audio:play', async (_event, { filepath }) => {
     const platform = process.platform
     let fullCommand = ''
 
-    // --- FIX IS HERE: Correctly construct the command string for each OS ---
     if (platform === 'darwin') {
-      // macOS
       fullCommand = `afplay "${filepath}"`
     } else if (platform === 'win32') {
-      // Windows: Use PowerShell to play the WAV file silently (no popup window)
-      // We replace single quotes in path to prevent breaking the PS command
       const safePath = filepath.replace(/'/g, "''")
       fullCommand = `powershell -c "(New-Object Media.SoundPlayer '${safePath}').PlaySync();"`
     } else {
-      // Linux
       fullCommand = `aplay "${filepath}"`
     }
 
-    console.log(`[Main] Executing: ${fullCommand}`)
-
-    // Execute the FULL command string
     currentPlayer = exec(fullCommand, (error) => {
-      currentPlayer = null // Reset when done
-
+      currentPlayer = null
       if (error && !error.killed) {
-        console.error(`[Main] Play error: ${error.message}`)
         reject(error.message)
       } else {
-        // Clean up file to save disk space
         fs.unlink(filepath, () => {})
         resolve('done')
       }
@@ -115,22 +132,23 @@ ipcMain.handle('audio:play', async (_event, { filepath }) => {
   })
 })
 
-// 3. STOP PLAYBACK (Immediate Kill)
+// 3. STOP PLAYBACK
 ipcMain.handle('audio:stop', async () => {
   if (currentPlayer) {
-    console.log('[Main] Stopping playback...')
     currentPlayer.kill()
     currentPlayer = null
   }
   return true
 })
 
-// 4. LOAD AUDIO FILE (For gapless playback in frontend)
+// 4. LOAD AUDIO FILE (For Frontend Gapless Playback)
 ipcMain.handle('audio:load', async (_event, { filepath }) => {
   try {
-    // Read the file into a buffer
     const buffer = fs.readFileSync(filepath)
-    // Return raw buffer (Electron handles sending this to frontend efficiently)
+    // Clean up file immediately after reading into memory
+    try {
+      fs.unlinkSync(filepath)
+    } catch (e) {}
     return buffer
   } catch (err: any) {
     console.error(`[Main] Failed to load audio: ${err.message}`)
@@ -140,13 +158,10 @@ ipcMain.handle('audio:load', async (_event, { filepath }) => {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
-
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
-
   createWindow()
-
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
