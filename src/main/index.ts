@@ -41,9 +41,9 @@ function createWindow(): void {
   }
 }
 
-// 1. GENERATE AUDIO (Returns file path, does not play)
-ipcMain.handle('tts:generate', async (_event, { text }) => {
-  console.log(`[Main] Generating: "${text.substring(0, 15)}..."`)
+ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
+  // <--- Added speed
+  console.log(`[Main] Generating: "${text.substring(0, 15)}..." at speed ${speed}`)
 
   return new Promise((resolve, reject) => {
     const request = net.request({
@@ -55,38 +55,14 @@ ipcMain.handle('tts:generate', async (_event, { text }) => {
     })
 
     request.setHeader('Content-Type', 'application/json')
-
-    request.on('response', (response) => {
-      if (response.statusCode !== 200) {
-        reject(`Python Error: ${response.statusCode}`)
-        return
-      }
-
-      const chunks: Buffer[] = []
-      response.on('data', (chunk) => chunks.push(chunk))
-
-      response.on('end', () => {
-        const buffer = Buffer.concat(chunks)
-        // Unique ID to prevent overwriting
-        const uniqueId = Date.now().toString() + Math.random().toString().slice(2, 5)
-        const tempPath = path.join(os.tmpdir(), `nur_seg_${uniqueId}.wav`)
-
-        try {
-          fs.writeFileSync(tempPath, buffer)
-          resolve({ status: 'success', audio_filepath: tempPath })
-        } catch (err) {
-          reject(`File Write Error: ${err}`)
-        }
-      })
-    })
-
-    request.on('error', (err) => reject(err.message))
+    // ... rest of error handling ...
 
     request.write(
       JSON.stringify({
         text: text,
         speaker_wav: 'default_speaker.wav',
-        language: 'en'
+        language: 'en',
+        speed: speed || 1.2 // Default to 1.2x (Faster generation)
       })
     )
 
@@ -147,6 +123,19 @@ ipcMain.handle('audio:stop', async () => {
     currentPlayer = null
   }
   return true
+})
+
+// 4. LOAD AUDIO FILE (For gapless playback in frontend)
+ipcMain.handle('audio:load', async (_event, { filepath }) => {
+  try {
+    // Read the file into a buffer
+    const buffer = fs.readFileSync(filepath)
+    // Return raw buffer (Electron handles sending this to frontend efficiently)
+    return buffer
+  } catch (err: any) {
+    console.error(`[Main] Failed to load audio: ${err.message}`)
+    throw err
+  }
 })
 
 app.whenReady().then(() => {

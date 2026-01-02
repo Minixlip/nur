@@ -2,8 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
-  generate: (text: string) => ipcRenderer.invoke('tts:generate', { text }),
-  play: (filepath: string) => ipcRenderer.invoke('audio:play', { filepath }),
+  // Allow passing speed (defaults to 1.2 if not provided)
+  generate: (text: string, speed: number = 1.2) =>
+    ipcRenderer.invoke('tts:generate', { text, speed }),
+  loadAudio: (filepath: string) => ipcRenderer.invoke('audio:load', { filepath }),
   stop: () => ipcRenderer.invoke('audio:stop')
 }
 
