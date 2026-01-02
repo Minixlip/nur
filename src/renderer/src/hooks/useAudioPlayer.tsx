@@ -1,5 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 
+// Define the promise result type explicitly
+interface AudioResult {
+  status: string
+  audio_data: Uint8Array | null
+}
+
 interface AudioPlayerProps {
   bookStructure: {
     allSentences: string[]
@@ -27,8 +33,9 @@ export function useAudioPlayer({
 
   const initAudioContext = () => {
     if (!audioCtxRef.current) {
-      // @ts-ignore
-      const AudioContext = window.AudioContext || window.webkitAudioContext
+      // Standard typescript knows window.AudioContext.
+      // webkitAudioContext is a legacy fallback usually not in strict TS types.
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext
       audioCtxRef.current = new AudioContext()
     }
     if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume()
@@ -45,13 +52,15 @@ export function useAudioPlayer({
       try {
         await audioCtxRef.current.close()
         audioCtxRef.current = null
-      } catch (e) {}
+      } catch (e) {
+        console.error(e)
+      }
     }
     scheduledNodesRef.current = []
     playbackTimeoutsRef.current.forEach((id) => clearTimeout(id))
     playbackTimeoutsRef.current = []
 
-    // @ts-ignore
+    // Typesafe call!
     await window.api.stop()
   }
 
@@ -76,7 +85,8 @@ export function useAudioPlayer({
     const activeSentences = sentences.slice(safeStartIndex)
     const getGlobalIndex = (localIndex: number) => safeStartIndex + localIndex
 
-    const audioPromises = new Array(activeSentences.length).fill(null)
+    // Type the promise array
+    const audioPromises: Promise<AudioResult>[] = new Array(activeSentences.length).fill(null)
     const BUFFER_SIZE = 3
     const STARTUP_BUFFER = 2
 
@@ -89,7 +99,7 @@ export function useAudioPlayer({
         if (text.includes('[[[IMG_MARKER')) {
           audioPromises[index] = Promise.resolve({ status: 'skipped', audio_data: null })
         } else {
-          // @ts-ignore
+          // Typesafe call!
           audioPromises[index] = window.api.generate(text, 1.2)
         }
       }
@@ -102,7 +112,9 @@ export function useAudioPlayer({
         setStatus(`Buffering ${waitCount} segments...`)
         try {
           await Promise.all(audioPromises.slice(0, waitCount))
-        } catch (err) {}
+        } catch (err) {
+          console.warn(err)
+        }
       }
 
       for (let i = 0; i < activeSentences.length; i++) {
@@ -111,7 +123,7 @@ export function useAudioPlayer({
         const globalIndex = getGlobalIndex(i)
         setStatus(`Reading chunk ${i + 1}...`)
 
-        let result = null
+        let result: AudioResult | null = null
         try {
           result = await audioPromises[i]
         } catch (err) {
@@ -133,9 +145,17 @@ export function useAudioPlayer({
           continue
         }
 
-        if (result && result.status === 'success') {
+        if (result && result.status === 'success' && result.audio_data) {
           try {
-            const cleanBuffer = new Uint8Array(result.audio_data).buffer
+            // Ensure clean buffer copy
+            const rawData = result.audio_data
+
+            // FIX: Explicitly cast to ArrayBuffer to satisfy TypeScript
+            const cleanBuffer = rawData.buffer.slice(
+              rawData.byteOffset,
+              rawData.byteOffset + rawData.byteLength
+            ) as ArrayBuffer
+
             const audioBuffer = await ctx.decodeAudioData(cleanBuffer)
 
             const source = ctx.createBufferSource()

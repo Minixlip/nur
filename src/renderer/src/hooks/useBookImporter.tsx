@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import ePub from 'epubjs'
 
+// 1. DEFINE DEFAULT PAGES (Missing piece)
 const DEFAULT_PAGES = [
   `Welcome to Nur Reader. To begin, please click the "Import Book" button.`,
   `You can select any .epub file. The AI will extract text and images, reading it aloud continuously.`
@@ -17,11 +18,9 @@ export function useBookImporter() {
       setIsLoading(true)
       setError(null)
 
-      // @ts-ignore
       const filePath = await window.api.openFileDialog()
       if (!filePath) return
 
-      // @ts-ignore
       const fileBuffer = await window.api.readFile(filePath)
       const rawData = new Uint8Array(fileBuffer)
       const cleanBuffer = rawData.buffer.slice(
@@ -31,12 +30,14 @@ export function useBookImporter() {
 
       const book = ePub(cleanBuffer)
       await book.ready
+
       const metadata = await book.loaded.metadata
       setBookTitle(metadata.title || 'Unknown Book')
 
       const newPages: string[] = []
-      // @ts-ignore
-      const spineItems = book.spine.spineItems
+
+      // @ts-expect-error - epubjs types missing spineItems
+      const spineItems = book.spine.spineItems as any[]
 
       console.log(`[Importer] Found ${spineItems.length} chapters.`)
 
@@ -46,14 +47,14 @@ export function useBookImporter() {
           const target = item.href || item.canonical
           if (!target) continue
 
-          const doc = await book.load(target)
+          const doc = (await book.load(target)) as Document | string
 
           let dom: Document
           if (typeof doc === 'string') {
             const parser = new DOMParser()
             dom = parser.parseFromString(doc, 'application/xhtml+xml')
           } else {
-            dom = doc as Document
+            dom = doc
           }
 
           // Remove Junk
@@ -65,9 +66,11 @@ export function useBookImporter() {
             const src = img.getAttribute('src') || img.getAttribute('href') || ''
             if (src) {
               try {
-                // @ts-ignore
+                // @ts-expect-error - internal API
                 const absolute = book.path.resolve(src, item.href)
-                const url = await book.archive.createUrl(absolute, { base64: false })
+                // @ts-expect-error - internal API
+                const url = await book.archive.createUrl(absolute)
+
                 const marker = ` [[[IMG_MARKER:${url}]]] `
                 const textNode = document.createTextNode(marker)
                 img.parentNode?.replaceChild(textNode, img)
@@ -78,7 +81,6 @@ export function useBookImporter() {
           }
 
           const rawString = new XMLSerializer().serializeToString(dom)
-          // Nuclear Regex: Kill tags, keep brackets
           let text = rawString.replace(/<[^>]+>/g, ' ')
 
           const txt = document.createElement('textarea')
@@ -108,7 +110,7 @@ export function useBookImporter() {
     }
   }
 
-  // Memoize structure to avoid recalculating on every render
+  // 2. PARSE STRUCTURE
   const bookStructure = useMemo(() => {
     const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
     const allSentences: string[] = []
