@@ -16,14 +16,15 @@ export interface VisualBlock {
 export interface TocItem {
   label: string
   href: string
-  pageIndex: number // The Virtual Page index where this chapter starts
+  pageIndex: number
 }
 
+// CONFIGURATION
 const CHARS_PER_PAGE = 1500
+const MAX_BLOCKS_PER_PAGE = 12 // FIX: Limit vertical items (prevents long ToC pages)
 
 export function useBookImporter() {
   const [rawChapters, setRawChapters] = useState<string[]>(DEFAULT_PAGES)
-  // Store the raw hrefs to map them to pages later
   const [chapterHrefs, setChapterHrefs] = useState<string[]>([])
   const [toc, setToc] = useState<TocItem[]>([])
 
@@ -52,7 +53,6 @@ export function useBookImporter() {
       const metadata = await book.loaded.metadata
       setBookTitle(metadata.title || 'Unknown Book')
 
-      // 1. EXTRACT RAW NAVIGATION (ToC)
       const navigation = await book.loaded.navigation
       const rawToc = navigation.toc
 
@@ -67,7 +67,6 @@ export function useBookImporter() {
       for (let i = 0; i < spineItems.length; i++) {
         const item = spineItems[i]
         try {
-          // Store the HREF for linking later
           const target = item.href
           if (!target) continue
 
@@ -132,7 +131,6 @@ export function useBookImporter() {
           const fullText = contentParts.join('\n\n')
           const cleanText = fullText.trim()
 
-          // Push even empty chapters so indexes align with hrefs
           newChapters.push(cleanText)
           newHrefs.push(target)
         } catch (err) {
@@ -142,10 +140,6 @@ export function useBookImporter() {
 
       setRawChapters(newChapters)
       setChapterHrefs(newHrefs)
-
-      // Pass rawToc to state temporarily, we will process it in useMemo
-      // We can't process it here because we don't know the page breaks yet
-      // So we store the raw object structure for now
       // @ts-expect-error
       setToc(rawToc)
     } catch (e: any) {
@@ -163,14 +157,10 @@ export function useBookImporter() {
     const sentenceToPageMap: number[] = []
     const pagesStructure: VisualBlock[][] = []
 
-    // MAP: Chapter Index -> Page Index (Where does Chapter X start?)
     const chapterStartPages: number[] = []
-
     let globalSentenceIndex = 0
 
     rawChapters.forEach((chapterText, chapterIdx) => {
-      // RECORD START PAGE OF THIS CHAPTER
-      // The current length of pagesStructure is the start page for this new chapter
       chapterStartPages[chapterIdx] = pagesStructure.length
 
       const rawBlocks = chapterText.split(/(\[\[\[IMG_MARKER:.*?\]\]\]|\n\n)/g)
@@ -216,13 +206,19 @@ export function useBookImporter() {
         }
       })
 
-      // PAGINATE
+      // PAGINATION LOGIC
       let currentPage: VisualBlock[] = []
       let currentLength = 0
 
       chapterBlocks.forEach((block) => {
         const blockLength = block.content.join(' ').length
-        if (currentLength + blockLength > CHARS_PER_PAGE && currentPage.length > 0) {
+
+        // CHECK 1: Character Limit (1500 chars)
+        const isFullText = currentLength + blockLength > CHARS_PER_PAGE
+        // CHECK 2: Block Limit (12 paragraphs) - This fixes the long list issue!
+        const isFullBlocks = currentPage.length >= MAX_BLOCKS_PER_PAGE
+
+        if ((isFullText || isFullBlocks) && currentPage.length > 0) {
           pagesStructure.push(currentPage)
           const pageIndex = pagesStructure.length - 1
           currentPage.forEach((b) => {
@@ -241,25 +237,14 @@ export function useBookImporter() {
           for (let i = 0; i < b.content.length; i++) sentenceToPageMap.push(pageIndex)
         })
       }
-      // Ensure empty chapters don't break logic (they start on the next available page)
-      if (chapterBlocks.length === 0 && pagesStructure.length > 0) {
-        // Point to the last page or next page?
-        // Keep it simple: point to current end
-      }
     })
 
-    // 3. PROCESS TABLE OF CONTENTS
-    // We map the raw EPUB ToC (hrefs) to our Virtual Page Indexes
+    // PROCESS TABLE OF CONTENTS
     const processedToc: TocItem[] = []
 
-    // Recursive function to flatten ToC if needed, or just iterate top level
     const processTocItems = (items: any[]) => {
       items.forEach((item) => {
-        // Find which chapter index matches this href
-        // item.href might be "chapter1.xhtml#subid" or just "chapter1.xhtml"
         const cleanHref = item.href.split('#')[0]
-
-        // Find index in our hrefs list
         const chapterIdx = chapterHrefs.findIndex((h) => h.includes(cleanHref))
 
         if (chapterIdx !== -1) {
@@ -275,9 +260,7 @@ export function useBookImporter() {
       })
     }
 
-    // @ts-expect-error
     if (toc && Array.isArray(toc)) {
-      // @ts-expect-error
       processTocItems(toc)
     }
 
