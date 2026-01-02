@@ -17,8 +17,6 @@ export default function Library(): React.JSX.Element {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const nextStartTimeRef = useRef(0)
   const scheduledNodesRef = useRef<AudioBufferSourceNode[]>([])
-
-  // NEW: Track synchronization timers so we can clear them on stop
   const playbackTimeoutsRef = useRef<NodeJS.Timeout[]>([])
 
   const bookStructure = useMemo(() => {
@@ -66,7 +64,6 @@ export default function Library(): React.JSX.Element {
     setIsPlaying(false)
     setStatus('Stopped')
 
-    // 1. Kill Audio
     if (audioCtxRef.current) {
       try {
         await audioCtxRef.current.close()
@@ -74,8 +71,6 @@ export default function Library(): React.JSX.Element {
       } catch (e) {}
     }
     scheduledNodesRef.current = []
-
-    // 2. Kill UI Timers (Prevents highlights from jumping after stop)
     playbackTimeoutsRef.current.forEach((id) => clearTimeout(id))
     playbackTimeoutsRef.current = []
 
@@ -97,13 +92,10 @@ export default function Library(): React.JSX.Element {
     nextStartTimeRef.current = ctx.currentTime + 0.1
 
     const sentences = bookStructure.allSentences
-    // Start reading from the top of the CURRENT VISUAL PAGE
     const startSentenceIndex = bookStructure.sentenceToPageMap.findIndex(
       (p) => p === visualPageIndex
     )
-    // If for some reason index is -1 (empty page), start at 0
     const safeStartIndex = startSentenceIndex >= 0 ? startSentenceIndex : 0
-
     const activeSentences = sentences.slice(safeStartIndex)
     const getGlobalIndex = (localIndex: number) => safeStartIndex + localIndex
 
@@ -131,14 +123,11 @@ export default function Library(): React.JSX.Element {
 
         const globalIndex = getGlobalIndex(i)
 
-        // NOTE: We REMOVED the setGlobalSentenceIndex from here!
-        // We only generate the request here.
         setStatus(`Buffering...`)
 
         const result = await audioPromises[i]
         if (stopSignalRef.current) break
 
-        // Buffer Ahead Logic
         const nextToSchedule = i + BUFFER_SIZE
         if (nextToSchedule < activeSentences.length && !audioPromises[nextToSchedule]) {
           // @ts-ignore
@@ -156,16 +145,26 @@ export default function Library(): React.JSX.Element {
           source.start(start)
           scheduledNodesRef.current.push(source)
 
-          // --- SYNCHRONIZATION MAGIC ---
-          // Calculate exactly how many seconds until this specific sentence starts playing
+          // --- FIX: DETECT END OF BOOK ---
+          // If this is the LAST sentence in the list, attach an 'onended' listener
+          if (i === activeSentences.length - 1) {
+            source.onended = () => {
+              if (!stopSignalRef.current) {
+                console.log('Book finished naturally.')
+                setIsPlaying(false)
+                isPlayingRef.current = false
+                setStatus('Completed')
+                setGlobalSentenceIndex(-1)
+              }
+            }
+          }
+          // -------------------------------
+
           const delayMs = (start - ctx.currentTime) * 1000
 
           const timeoutId = setTimeout(() => {
-            // This runs exactly when the audio starts!
             if (!stopSignalRef.current) {
               setGlobalSentenceIndex(globalIndex)
-
-              // Check if we need to flip the page
               const pageOfThisSentence = bookStructure.sentenceToPageMap[globalIndex]
               setVisualPageIndex((current) => {
                 if (current !== pageOfThisSentence) return pageOfThisSentence
@@ -175,7 +174,6 @@ export default function Library(): React.JSX.Element {
           }, delayMs)
 
           playbackTimeoutsRef.current.push(timeoutId)
-          // -----------------------------
 
           nextStartTimeRef.current = start + audioBuffer.duration
 
@@ -185,11 +183,17 @@ export default function Library(): React.JSX.Element {
           }
         }
       }
-      setStatus('Finished')
+
+      // We removed setStatus('Finished') from here because the loop finishes BEFORE audio finishes.
+      // The status update now happens in the source.onended callback above.
     } catch (e: any) {
       console.error(e)
       setStatus('Error: ' + e.message)
+      setIsPlaying(false)
+      isPlayingRef.current = false
     } finally {
+      // Only force stop if the user clicked Stop.
+      // Otherwise let the 'onended' event handle the cleanup.
       if (stopSignalRef.current) {
         setIsPlaying(false)
         isPlayingRef.current = false
