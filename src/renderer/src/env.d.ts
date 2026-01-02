@@ -22,6 +22,20 @@ interface IElectronAPI {
   }
 }
 
+interface SavedBook {
+  id: string
+  title: string
+  path: string
+  dateAdded: string
+}
+
+interface ICustomAPI {
+  // ... existing methods ...
+  saveBook: (path: string, title: string) => Promise<{ success: boolean; book?: SavedBook }>
+  getLibrary: () => Promise<SavedBook[]>
+  deleteBook: (id: string) => Promise<boolean>
+}
+
 declare global {
   interface Window {
     electron: IElectronAPI

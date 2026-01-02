@@ -9,7 +9,10 @@ const api = {
   stop: () => ipcRenderer.invoke('audio:stop'),
   // NEW:
   openFileDialog: () => ipcRenderer.invoke('dialog:openFile'),
-  readFile: (filepath: string) => ipcRenderer.invoke('fs:readFile', { filepath })
+  readFile: (filepath: string) => ipcRenderer.invoke('fs:readFile', { filepath }),
+  saveBook: (path: string, title: string) => ipcRenderer.invoke('save-book', path, title),
+  getLibrary: () => ipcRenderer.invoke('get-library'),
+  deleteBook: (id: string) => ipcRenderer.invoke('delete-book', id)
 }
 
 if (process.contextIsolated) {

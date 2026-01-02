@@ -7,6 +7,7 @@ import path from 'path'
 import os from 'os'
 import { net } from 'electron'
 import { exec, ChildProcess } from 'child_process'
+import { setupLibraryHandlers } from './library'
 
 let currentPlayer: ChildProcess | null = null
 
@@ -162,6 +163,10 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
+
+  // INITIALIZE YOUR LIBRARY LOGIC HERE
+  setupLibraryHandlers()
+
   createWindow()
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
