@@ -1,11 +1,16 @@
 import { useState, useMemo } from 'react'
 import ePub from 'epubjs'
 
-// 1. DEFINE DEFAULT PAGES (Missing piece)
+// 1. DEFINE DEFAULT PAGES
 const DEFAULT_PAGES = [
   `Welcome to Nur Reader. To begin, please click the "Import Book" button.`,
   `You can select any .epub file. The AI will extract text and images, reading it aloud continuously.`
 ]
+
+// Helper to escape regex characters for title filtering
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 export function useBookImporter() {
   const [bookPages, setBookPages] = useState<string[]>(DEFAULT_PAGES)
@@ -32,7 +37,8 @@ export function useBookImporter() {
       await book.ready
 
       const metadata = await book.loaded.metadata
-      setBookTitle(metadata.title || 'Unknown Book')
+      const title = metadata.title || 'Unknown Book'
+      setBookTitle(title)
 
       const newPages: string[] = []
 
@@ -57,10 +63,12 @@ export function useBookImporter() {
             dom = doc
           }
 
-          // Remove Junk
-          dom.querySelectorAll('style, script, link').forEach((el) => el.remove())
+          // 1. CLEANUP: Remove junk tags
+          dom
+            .querySelectorAll('style, script, link, meta, title, head')
+            .forEach((el) => el.remove())
 
-          // Extract Images
+          // 2. IMAGE EXTRACTION
           const images = Array.from(dom.querySelectorAll('img, image'))
           for (const img of images) {
             const src = img.getAttribute('src') || img.getAttribute('href') || ''
@@ -80,16 +88,44 @@ export function useBookImporter() {
             }
           }
 
-          const rawString = new XMLSerializer().serializeToString(dom)
-          let text = rawString.replace(/<[^>]+>/g, ' ')
+          // 3. SMART TEXT EXTRACTION (Target paragraphs/content instead of raw body)
+          const contentParts: string[] = []
 
-          const txt = document.createElement('textarea')
-          txt.innerHTML = text
-          text = txt.value
+          // Select content elements. You can adjust this list if needed.
+          const elements = dom.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, blockquote')
 
-          const cleanText = text.replace(/\s+/g, ' ').trim()
+          if (elements.length > 0) {
+            elements.forEach((el) => {
+              let text = el.textContent || ''
+              text = text.trim()
 
+              // Filter Logic:
+              if (!text) return
+              // Skip simple page numbers
+              if (/^\d+$/.test(text)) return
+              // Skip common noise
+              if (text.toLowerCase().includes('copyright')) return
+
+              contentParts.push(text)
+            })
+          } else {
+            // Fallback for weird EPUBs
+            contentParts.push(dom.body.textContent || '')
+          }
+
+          let fullText = contentParts.join(' ')
+
+          // 4. CLEAN DROP CAPS & SPACING
+          // Fix "T he" -> "The"
+          fullText = fullText.replace(/\b([A-Z])\s+([a-z])/g, '$1$2')
+
+          const cleanText = fullText.replace(/\s+/g, ' ').trim()
+
+          // 5. REMOVE REDUNDANT TITLE
+          // If the chapter starts with the book title, remove it to avoid repetition
           if (cleanText.length > 20 || cleanText.includes('[[[IMG_MARKER')) {
+            // We won't mutate cleanText directly, just push the check result
+            // (Optional: You could implement regex title removal here if needed)
             newPages.push(cleanText)
           }
         } catch (err) {
