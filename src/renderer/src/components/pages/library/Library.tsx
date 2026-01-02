@@ -2,11 +2,12 @@ import React, { useState } from 'react'
 import { useBookImporter } from '../../../hooks/useBookImporter'
 import { useAudioPlayer } from '../../../hooks/useAudioPlayer'
 import { BookViewer } from '../../bookViewer'
+import { TableOfContents } from '../../TableOfContents' // Import new component
 
 export default function Library(): React.JSX.Element {
   const [visualPageIndex, setVisualPageIndex] = useState(0)
+  const [isTocOpen, setIsTocOpen] = useState(false) // State for ToC Menu
 
-  // 1. GET totalPages HERE
   const { totalPages, bookTitle, isLoading, error, importBook, bookStructure } = useBookImporter()
 
   const { isPlaying, globalSentenceIndex, status, play, stop } = useAudioPlayer({
@@ -15,7 +16,6 @@ export default function Library(): React.JSX.Element {
     setVisualPageIndex
   })
 
-  // 2. USE totalPages INSTEAD OF bookPages.length
   const handleNextPage = () => setVisualPageIndex((p) => Math.min(totalPages - 1, p + 1))
   const handlePrevPage = () => setVisualPageIndex((p) => Math.max(0, p - 1))
 
@@ -45,11 +45,21 @@ export default function Library(): React.JSX.Element {
         </button>
       </div>
 
-      {/* READER CONTAINER */}
-      <div className="max-w-3xl mx-auto bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700">
+      {/* READER CONTAINER (Added relative for ToC overlay) */}
+      <div className="relative max-w-3xl mx-auto bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 min-h-[600px]">
+        {/* TABLE OF CONTENTS OVERLAY */}
+        <TableOfContents
+          items={bookStructure.processedToc || []}
+          isOpen={isTocOpen}
+          onClose={() => setIsTocOpen(false)}
+          currentVisualPage={visualPageIndex}
+          onChapterClick={(pageIndex) => setVisualPageIndex(pageIndex)}
+        />
+
         {/* TOOLBAR */}
         <div className="bg-gray-750 p-4 border-b border-gray-700 flex justify-between items-center backdrop-blur-sm">
-          <div className="flex items-center gap-4">
+          {/* Left: Navigation */}
+          <div className="flex items-center gap-2">
             <button
               onClick={handlePrevPage}
               disabled={visualPageIndex === 0}
@@ -57,16 +67,22 @@ export default function Library(): React.JSX.Element {
             >
               ←
             </button>
-            <div className="text-center">
+
+            {/* Chapter / Title Info (Clickable for ToC) */}
+            <button
+              onClick={() => setIsTocOpen(true)}
+              disabled={totalPages === 0}
+              className="text-center px-4 hover:bg-gray-700/50 rounded cursor-pointer transition"
+              title="Click to view Chapters"
+            >
               <div className="font-semibold text-white italic truncate max-w-[200px]">
                 {bookTitle}
               </div>
-              {/* USE totalPages HERE */}
               <div className="text-xs font-mono text-gray-400">
                 Page {visualPageIndex + 1} / {Math.max(1, totalPages)}
               </div>
-            </div>
-            {/* USE totalPages HERE */}
+            </button>
+
             <button
               onClick={handleNextPage}
               disabled={visualPageIndex >= totalPages - 1}
@@ -75,11 +91,22 @@ export default function Library(): React.JSX.Element {
               →
             </button>
           </div>
+
+          {/* Right: Controls */}
           <div className="flex gap-2">
+            {/* Toggle ToC Button (List Icon) */}
+            <button
+              onClick={() => setIsTocOpen(!isTocOpen)}
+              disabled={totalPages === 0}
+              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300"
+              title="Chapters"
+            >
+              ☰
+            </button>
+
             {!isPlaying ? (
               <button
                 onClick={play}
-                // FIX: Check totalPages === 0
                 disabled={totalPages === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold shadow-lg transition-all"
               >
@@ -97,7 +124,7 @@ export default function Library(): React.JSX.Element {
         </div>
 
         {/* CONTENT */}
-        <div className="p-8 min-h-[500px] max-h-[70vh] overflow-y-auto">
+        <div className="p-8 h-[65vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
           <BookViewer
             bookStructure={bookStructure}
             visualPageIndex={visualPageIndex}

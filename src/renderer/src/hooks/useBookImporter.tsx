@@ -12,11 +12,21 @@ export interface VisualBlock {
   startIndex: number
 }
 
-// CONFIG: How much text fits on one screen?
+// Data structure for Table of Contents
+export interface TocItem {
+  label: string
+  href: string
+  pageIndex: number // The Virtual Page index where this chapter starts
+}
+
 const CHARS_PER_PAGE = 1500
 
 export function useBookImporter() {
   const [rawChapters, setRawChapters] = useState<string[]>(DEFAULT_PAGES)
+  // Store the raw hrefs to map them to pages later
+  const [chapterHrefs, setChapterHrefs] = useState<string[]>([])
+  const [toc, setToc] = useState<TocItem[]>([])
+
   const [bookTitle, setBookTitle] = useState('Nur Reader')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,7 +41,6 @@ export function useBookImporter() {
 
       const fileBuffer = await window.api.readFile(filePath)
       const rawData = new Uint8Array(fileBuffer)
-
       const cleanBuffer = rawData.buffer.slice(
         rawData.byteOffset,
         rawData.byteOffset + rawData.byteLength
@@ -43,7 +52,13 @@ export function useBookImporter() {
       const metadata = await book.loaded.metadata
       setBookTitle(metadata.title || 'Unknown Book')
 
+      // 1. EXTRACT RAW NAVIGATION (ToC)
+      const navigation = await book.loaded.navigation
+      const rawToc = navigation.toc
+
       const newChapters: string[] = []
+      const newHrefs: string[] = []
+
       // @ts-expect-error
       const spineItems = book.spine.spineItems as any[]
 
@@ -52,7 +67,8 @@ export function useBookImporter() {
       for (let i = 0; i < spineItems.length; i++) {
         const item = spineItems[i]
         try {
-          const target = item.href || item.canonical
+          // Store the HREF for linking later
+          const target = item.href
           if (!target) continue
 
           const doc = (await book.load(target)) as Document | string
@@ -88,7 +104,7 @@ export function useBookImporter() {
             }
           }
 
-          // Content Extraction
+          // Extraction
           const contentParts: string[] = []
           const elements = dom.querySelectorAll(
             'p, div, h1, h2, h3, h4, h5, h6, li, blockquote, pre'
@@ -106,7 +122,6 @@ export function useBookImporter() {
                 contentParts.push(text)
                 return
               }
-
               text = text.replace(/\s+/g, ' ')
               contentParts.push(text)
             })
@@ -114,22 +129,25 @@ export function useBookImporter() {
             contentParts.push(dom.body.textContent || '')
           }
 
-          let fullText = contentParts.join('\n\n')
+          const fullText = contentParts.join('\n\n')
           const cleanText = fullText.trim()
 
-          if (cleanText.length > 20 || cleanText.includes('[[[IMG_MARKER')) {
-            newChapters.push(cleanText)
-          }
+          // Push even empty chapters so indexes align with hrefs
+          newChapters.push(cleanText)
+          newHrefs.push(target)
         } catch (err) {
           console.warn(err)
         }
       }
 
-      if (newChapters.length > 0) {
-        setRawChapters(newChapters)
-      } else {
-        setError('Error: No content found')
-      }
+      setRawChapters(newChapters)
+      setChapterHrefs(newHrefs)
+
+      // Pass rawToc to state temporarily, we will process it in useMemo
+      // We can't process it here because we don't know the page breaks yet
+      // So we store the raw object structure for now
+      // @ts-expect-error
+      setToc(rawToc)
     } catch (e: any) {
       console.error(e)
       setError('Import Error: ' + e.message)
@@ -143,15 +161,18 @@ export function useBookImporter() {
     const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
     const allSentences: string[] = []
     const sentenceToPageMap: number[] = []
-
-    // Instead of Chapters, we now have "Virtual Pages"
     const pagesStructure: VisualBlock[][] = []
+
+    // MAP: Chapter Index -> Page Index (Where does Chapter X start?)
+    const chapterStartPages: number[] = []
 
     let globalSentenceIndex = 0
 
-    // Iterate through real Chapters
-    rawChapters.forEach((chapterText) => {
-      // 1. Break Chapter into Blocks
+    rawChapters.forEach((chapterText, chapterIdx) => {
+      // RECORD START PAGE OF THIS CHAPTER
+      // The current length of pagesStructure is the start page for this new chapter
+      chapterStartPages[chapterIdx] = pagesStructure.length
+
       const rawBlocks = chapterText.split(/(\[\[\[IMG_MARKER:.*?\]\]\]|\n\n)/g)
       const chapterBlocks: VisualBlock[] = []
 
@@ -160,7 +181,6 @@ export function useBookImporter() {
         if (!trimmed) return
 
         if (trimmed.startsWith('[[[IMG_MARKER')) {
-          // IMAGE BLOCK
           chapterBlocks.push({
             type: 'image',
             content: [trimmed],
@@ -169,11 +189,9 @@ export function useBookImporter() {
           allSentences.push(trimmed)
           globalSentenceIndex++
         } else {
-          // TEXT BLOCK
           const rawSegments = [...segmenter.segment(trimmed)].map((s) => s.segment)
           const blockSentences: string[] = []
           let buffer = ''
-
           for (const seg of rawSegments) {
             const t = seg.trim()
             if (!t) continue
@@ -198,35 +216,24 @@ export function useBookImporter() {
         }
       })
 
-      // 2. PAGINATE THE BLOCKS
-      // We accumulate blocks until we hit CHARS_PER_PAGE, then start a new page
+      // PAGINATE
       let currentPage: VisualBlock[] = []
       let currentLength = 0
 
       chapterBlocks.forEach((block) => {
         const blockLength = block.content.join(' ').length
-
-        // If adding this block exceeds limit (and page isn't empty), push page
         if (currentLength + blockLength > CHARS_PER_PAGE && currentPage.length > 0) {
           pagesStructure.push(currentPage)
-
-          // Map sentences to this new page index
           const pageIndex = pagesStructure.length - 1
           currentPage.forEach((b) => {
-            // Each sentence in this block belongs to 'pageIndex'
             for (let i = 0; i < b.content.length; i++) sentenceToPageMap.push(pageIndex)
           })
-
-          // Reset
           currentPage = []
           currentLength = 0
         }
-
         currentPage.push(block)
         currentLength += blockLength
       })
-
-      // Push remaining blocks
       if (currentPage.length > 0) {
         pagesStructure.push(currentPage)
         const pageIndex = pagesStructure.length - 1
@@ -234,14 +241,51 @@ export function useBookImporter() {
           for (let i = 0; i < b.content.length; i++) sentenceToPageMap.push(pageIndex)
         })
       }
+      // Ensure empty chapters don't break logic (they start on the next available page)
+      if (chapterBlocks.length === 0 && pagesStructure.length > 0) {
+        // Point to the last page or next page?
+        // Keep it simple: point to current end
+      }
     })
 
-    return { allSentences, sentenceToPageMap, pagesStructure }
-  }, [rawChapters])
+    // 3. PROCESS TABLE OF CONTENTS
+    // We map the raw EPUB ToC (hrefs) to our Virtual Page Indexes
+    const processedToc: TocItem[] = []
+
+    // Recursive function to flatten ToC if needed, or just iterate top level
+    const processTocItems = (items: any[]) => {
+      items.forEach((item) => {
+        // Find which chapter index matches this href
+        // item.href might be "chapter1.xhtml#subid" or just "chapter1.xhtml"
+        const cleanHref = item.href.split('#')[0]
+
+        // Find index in our hrefs list
+        const chapterIdx = chapterHrefs.findIndex((h) => h.includes(cleanHref))
+
+        if (chapterIdx !== -1) {
+          processedToc.push({
+            label: item.label.trim(),
+            href: item.href,
+            pageIndex: chapterStartPages[chapterIdx] || 0
+          })
+        }
+        if (item.subitems && item.subitems.length > 0) {
+          processTocItems(item.subitems)
+        }
+      })
+    }
+
+    // @ts-expect-error
+    if (toc && Array.isArray(toc)) {
+      // @ts-expect-error
+      processTocItems(toc)
+    }
+
+    return { allSentences, sentenceToPageMap, pagesStructure, processedToc }
+  }, [rawChapters, toc, chapterHrefs])
 
   return {
-    bookPages: rawChapters, // Kept for reference if needed
-    totalPages: bookStructure.pagesStructure.length, // EXPOSE TOTAL PAGES
+    totalPages: bookStructure.pagesStructure.length,
     bookTitle,
     isLoading,
     error,
