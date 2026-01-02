@@ -40,11 +40,10 @@ function createWindow(): void {
   }
 }
 
-// 1. GENERATE AUDIO (With Speed Control)
+// 1. GENERATE AUDIO (In-Memory Optimization)
 ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
-  // Default to 1.0 if speed is missing
   const safeSpeed = speed || 1.0
-  console.log(`[Main] Generating: "${text.substring(0, 15)}..." (Speed: ${safeSpeed})`)
+  console.log(`[Main] Requesting: "${text.substring(0, 10)}..."`)
 
   return new Promise((resolve, reject) => {
     const request = net.request({
@@ -68,24 +67,24 @@ ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
 
       response.on('end', () => {
         const buffer = Buffer.concat(chunks)
-        const uniqueId = Date.now().toString() + Math.random().toString().slice(2, 5)
-        const tempPath = path.join(os.tmpdir(), `nur_seg_${uniqueId}.wav`)
 
-        try {
-          fs.writeFileSync(tempPath, buffer)
-          resolve({ status: 'success', audio_filepath: tempPath })
-        } catch (err) {
-          reject(`File Write Error: ${err}`)
-        }
+        // OPTIMIZATION: Do NOT write to file.
+        // We return the buffer directly.
+        // Note: Electron cannot send a raw "Buffer" object over IPC easily in some versions,
+        // so we convert it to a format the frontend can easily read (Base64 or Uint8Array).
+        // However, Electron's 'invoke' handles Buffers reasonably well in modern versions.
+
+        // We return a "virtual" path or ID so the frontend logic remains consistent,
+        // OR we just return the data. Let's return the data directly.
+        resolve({
+          status: 'success',
+          audio_data: buffer // Sending raw RAM buffer
+        })
       })
     })
 
-    request.on('error', (err) => {
-      console.error('[Main] Request Error:', err)
-      reject(err.message)
-    })
+    request.on('error', (err) => reject(err.message))
 
-    // Send the JSON body with the speed parameter
     request.write(
       JSON.stringify({
         text: text,

@@ -1,38 +1,54 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
+
+const BOOK_PAGES = [
+  `I still remember the day my father took me to the Cemetery of Forgotten Books for the first time. It was the early summer of 1945, and we walked through the streets of a Barcelona trapped beneath ashen skies as a dawn of mist poured over the Rambla de Santa Mónica.`,
+  `"Daniel, you mustn't tell anyone what you're about to see today," my father warned. "No one." "Not even my friend Bernat?" "No one," he said, smoothing his hat. "This is a place of mystery, Daniel, a sanctuary."`,
+  `Every book, every volume you see here, has a soul. The soul of the person who wrote it and of those who read it and lived and dreamed with it. Every time a book changes hands, every time someone runs his eyes down its pages, its spirit grows and strengthens.`
+]
 
 export default function Library(): React.JSX.Element {
   const [isPlaying, setIsPlaying] = useState(false)
-  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1)
+  const [globalSentenceIndex, setGlobalSentenceIndex] = useState(-1)
   const [status, setStatus] = useState('Idle')
+  const [visualPageIndex, setVisualPageIndex] = useState(0)
 
   const isPlayingRef = useRef(false)
   const stopSignalRef = useRef(false)
-
   const audioCtxRef = useRef<AudioContext | null>(null)
   const nextStartTimeRef = useRef(0)
   const scheduledNodesRef = useRef<AudioBufferSourceNode[]>([])
 
-  const bookTitle = 'The Shadow of the Wind'
-  const bookContent = `I still remember the day my father took me to the Cemetery of Forgotten Books for the first time. It was the early summer of 1945, and we walked through the streets of a Barcelona trapped beneath ashen skies as a dawn of mist poured over the Rambla de Santa Mónica. "Daniel, you mustn't tell anyone what you're about to see today," my father warned. "No one." "Not even my friend Bernat?" "No one," he said, smoothing his hat. "This is a place of mystery, Daniel, a sanctuary. Every book, every volume you see here, has a soul. The soul of the person who wrote it and of those who read it and lived and dreamed with it."`
+  // NEW: Track synchronization timers so we can clear them on stop
+  const playbackTimeoutsRef = useRef<NodeJS.Timeout[]>([])
 
-  // MERGING LOGIC: Combines small sentences into chunks
-  const splitSentences = (text: string) => {
-    const rawParts = text.match(/[^.!?,\n]+[.!?,\n]+["']?|[^.!?,\n]+$/g) || [text]
-    const merged: string[] = []
-    let buffer = ''
+  const bookStructure = useMemo(() => {
+    const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
+    const allSentences: string[] = []
+    const sentenceToPageMap: number[] = []
 
-    for (const part of rawParts) {
-      // Merge if the buffer is less than 30 characters
-      if ((buffer + part).length < 30) {
-        buffer += ' ' + part
-      } else {
-        if (buffer) merged.push(buffer.trim())
-        buffer = part
+    BOOK_PAGES.forEach((pageText, pageIndex) => {
+      const rawSegments = [...segmenter.segment(pageText)].map((s) => s.segment)
+      let buffer = ''
+      for (const part of rawSegments) {
+        const trimmed = part.trim()
+        if (!trimmed) continue
+        if ((buffer + ' ' + trimmed).length < 40 || /^[")\]}]+$/.test(trimmed)) {
+          buffer += ' ' + trimmed
+        } else {
+          if (buffer) {
+            allSentences.push(buffer.trim())
+            sentenceToPageMap.push(pageIndex)
+          }
+          buffer = trimmed
+        }
       }
-    }
-    if (buffer) merged.push(buffer.trim())
-    return merged
-  }
+      if (buffer) {
+        allSentences.push(buffer.trim())
+        sentenceToPageMap.push(pageIndex)
+      }
+    })
+    return { allSentences, sentenceToPageMap }
+  }, [])
 
   const initAudioContext = () => {
     if (!audioCtxRef.current) {
@@ -40,9 +56,7 @@ export default function Library(): React.JSX.Element {
       const AudioContext = window.AudioContext || window.webkitAudioContext
       audioCtxRef.current = new AudioContext()
     }
-    if (audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume()
-    }
+    if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume()
   }
 
   const handleStop = async () => {
@@ -51,88 +65,127 @@ export default function Library(): React.JSX.Element {
     isPlayingRef.current = false
     setIsPlaying(false)
     setStatus('Stopped')
-    setCurrentSentenceIndex(-1)
 
+    // 1. Kill Audio
     if (audioCtxRef.current) {
       try {
         await audioCtxRef.current.close()
         audioCtxRef.current = null
-      } catch (e) {
-        console.error(e)
-      }
+      } catch (e) {}
     }
     scheduledNodesRef.current = []
+
+    // 2. Kill UI Timers (Prevents highlights from jumping after stop)
+    playbackTimeoutsRef.current.forEach((id) => clearTimeout(id))
+    playbackTimeoutsRef.current = []
 
     // @ts-ignore
     await window.api.stop()
   }
 
-  const handleReadAloud = async () => {
+  const handleReadBook = async () => {
     if (isPlayingRef.current) return
 
     stopSignalRef.current = false
     isPlayingRef.current = true
     setIsPlaying(true)
-
     initAudioContext()
+
     const ctx = audioCtxRef.current
     if (!ctx) return
 
     nextStartTimeRef.current = ctx.currentTime + 0.1
 
-    const sentences = splitSentences(bookContent)
-    const audioPromises = new Array(sentences.length).fill(null)
+    const sentences = bookStructure.allSentences
+    // Start reading from the top of the CURRENT VISUAL PAGE
+    const startSentenceIndex = bookStructure.sentenceToPageMap.findIndex(
+      (p) => p === visualPageIndex
+    )
+    // If for some reason index is -1 (empty page), start at 0
+    const safeStartIndex = startSentenceIndex >= 0 ? startSentenceIndex : 0
+
+    const activeSentences = sentences.slice(safeStartIndex)
+    const getGlobalIndex = (localIndex: number) => safeStartIndex + localIndex
+
+    const audioPromises = new Array(activeSentences.length).fill(null)
     const BUFFER_SIZE = 3
+    const STARTUP_BUFFER = 2
 
     try {
       setStatus('Buffering...')
 
-      // Start initial batch
-      for (let i = 0; i < Math.min(sentences.length, BUFFER_SIZE); i++) {
-        // @ts-ignore - PASSING 1.2 SPEED HERE
-        audioPromises[i] = window.api.generate(sentences[i], 1.2)
+      const initialBatch = Math.min(activeSentences.length, BUFFER_SIZE)
+      for (let i = 0; i < initialBatch; i++) {
+        // @ts-ignore
+        audioPromises[i] = window.api.generate(activeSentences[i], 1.2)
       }
 
-      for (let i = 0; i < sentences.length; i++) {
-        if (stopSignalRef.current) break
-        setCurrentSentenceIndex(i)
+      const waitCount = Math.min(activeSentences.length, STARTUP_BUFFER)
+      if (waitCount > 0) {
+        setStatus(`Buffering ${waitCount} segments...`)
+        await Promise.all(audioPromises.slice(0, waitCount))
+      }
 
-        const currentAudioResult = await audioPromises[i]
+      for (let i = 0; i < activeSentences.length; i++) {
         if (stopSignalRef.current) break
 
-        // Schedule next batch
+        const globalIndex = getGlobalIndex(i)
+
+        // NOTE: We REMOVED the setGlobalSentenceIndex from here!
+        // We only generate the request here.
+        setStatus(`Buffering...`)
+
+        const result = await audioPromises[i]
+        if (stopSignalRef.current) break
+
+        // Buffer Ahead Logic
         const nextToSchedule = i + BUFFER_SIZE
-        if (nextToSchedule < sentences.length && !audioPromises[nextToSchedule]) {
-          // @ts-ignore - PASSING 1.2 SPEED HERE
-          audioPromises[nextToSchedule] = window.api.generate(sentences[nextToSchedule], 1.2)
+        if (nextToSchedule < activeSentences.length && !audioPromises[nextToSchedule]) {
+          // @ts-ignore
+          audioPromises[nextToSchedule] = window.api.generate(activeSentences[nextToSchedule], 1.2)
         }
 
-        if (currentAudioResult && currentAudioResult.status === 'success') {
-          // @ts-ignore
-          const rawBuffer = await window.api.loadAudio(currentAudioResult.audio_filepath)
-          const audioBuffer = await ctx.decodeAudioData(rawBuffer.buffer)
-
+        if (result && result.status === 'success') {
+          const cleanBuffer = new Uint8Array(result.audio_data).buffer
+          const audioBuffer = await ctx.decodeAudioData(cleanBuffer)
           const source = ctx.createBufferSource()
           source.buffer = audioBuffer
           source.connect(ctx.destination)
 
           const start = Math.max(ctx.currentTime, nextStartTimeRef.current)
           source.start(start)
-
           scheduledNodesRef.current.push(source)
+
+          // --- SYNCHRONIZATION MAGIC ---
+          // Calculate exactly how many seconds until this specific sentence starts playing
+          const delayMs = (start - ctx.currentTime) * 1000
+
+          const timeoutId = setTimeout(() => {
+            // This runs exactly when the audio starts!
+            if (!stopSignalRef.current) {
+              setGlobalSentenceIndex(globalIndex)
+
+              // Check if we need to flip the page
+              const pageOfThisSentence = bookStructure.sentenceToPageMap[globalIndex]
+              setVisualPageIndex((current) => {
+                if (current !== pageOfThisSentence) return pageOfThisSentence
+                return current
+              })
+            }
+          }, delayMs)
+
+          playbackTimeoutsRef.current.push(timeoutId)
+          // -----------------------------
+
           nextStartTimeRef.current = start + audioBuffer.duration
 
-          // Throttle
           const timeUntilPlay = start - ctx.currentTime
-          if (timeUntilPlay > 10) {
-            setStatus(`Buffered far ahead...`)
+          if (timeUntilPlay > 15) {
             await new Promise((r) => setTimeout(r, (timeUntilPlay - 5) * 1000))
-          } else {
-            setStatus(`Reading segment ${i + 1}/${sentences.length}...`)
           }
         }
       }
-      setStatus('All segments scheduled.')
+      setStatus('Finished')
     } catch (e: any) {
       console.error(e)
       setStatus('Error: ' + e.message)
@@ -142,6 +195,29 @@ export default function Library(): React.JSX.Element {
         isPlayingRef.current = false
       }
     }
+  }
+
+  const renderPageContent = () => {
+    const pageSentences = bookStructure.allSentences
+      .map((text, idx) => ({ text, idx }))
+      .filter((item) => bookStructure.sentenceToPageMap[item.idx] === visualPageIndex)
+
+    return (
+      <div className="leading-relaxed text-lg text-gray-300 font-serif">
+        {pageSentences.map((item, localIdx) => (
+          <span
+            key={localIdx}
+            className={`transition-all duration-300 px-1 rounded ${
+              item.idx === globalSentenceIndex && isPlaying
+                ? 'bg-indigo-600/40 text-white shadow-sm box-decoration-clone'
+                : ''
+            }`}
+          >
+            {item.text}{' '}
+          </span>
+        ))}
+      </div>
+    )
   }
 
   useEffect(() => {
@@ -160,14 +236,32 @@ export default function Library(): React.JSX.Element {
       </div>
       <div className="max-w-3xl mx-auto bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700">
         <div className="bg-gray-750 p-4 border-b border-gray-700 flex justify-between items-center backdrop-blur-sm">
-          <h2 className="text-xl font-semibold text-white italic">{bookTitle}</h2>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setVisualPageIndex((p) => Math.max(0, p - 1))}
+              disabled={visualPageIndex === 0}
+              className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+            >
+              ← Prev
+            </button>
+            <span className="font-mono text-gray-400">
+              Page {visualPageIndex + 1} / {BOOK_PAGES.length}
+            </span>
+            <button
+              onClick={() => setVisualPageIndex((p) => Math.min(BOOK_PAGES.length - 1, p + 1))}
+              disabled={visualPageIndex === BOOK_PAGES.length - 1}
+              className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
+            >
+              Next →
+            </button>
+          </div>
           <div className="flex gap-2">
             {!isPlaying ? (
               <button
-                onClick={handleReadAloud}
+                onClick={handleReadBook}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold shadow-lg transition-all"
               >
-                <span>▶</span> Read Book
+                <span>▶</span> Read
               </button>
             ) : (
               <button
@@ -179,16 +273,7 @@ export default function Library(): React.JSX.Element {
             )}
           </div>
         </div>
-        <div className="p-8 leading-relaxed text-lg text-gray-300 font-serif">
-          {splitSentences(bookContent).map((sentence, index) => (
-            <span
-              key={index}
-              className={`transition-all duration-300 px-1 rounded ${index === currentSentenceIndex && isPlaying ? 'bg-indigo-600/40 text-white shadow-sm box-decoration-clone' : ''}`}
-            >
-              {sentence}{' '}
-            </span>
-          ))}
-        </div>
+        <div className="p-8 min-h-[400px]">{renderPageContent()}</div>
       </div>
     </div>
   )
