@@ -12,16 +12,14 @@ export interface VisualBlock {
   startIndex: number
 }
 
-// Data structure for Table of Contents
 export interface TocItem {
   label: string
   href: string
   pageIndex: number
 }
 
-// CONFIGURATION
 const CHARS_PER_PAGE = 1500
-const MAX_BLOCKS_PER_PAGE = 12 // FIX: Limit vertical items (prevents long ToC pages)
+const MAX_BLOCKS_PER_PAGE = 12
 
 export function useBookImporter() {
   const [rawChapters, setRawChapters] = useState<string[]>(DEFAULT_PAGES)
@@ -32,13 +30,110 @@ export function useBookImporter() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const importBook = async () => {
+  // CORE LOGIC: Parses an ArrayBuffer into our book structure
+  const parseEpubData = async (buffer: ArrayBuffer, originHref: string = '') => {
+    const book = ePub(buffer)
+    await book.ready
+
+    const metadata = await book.loaded.metadata
+    setBookTitle(metadata.title || 'Unknown Book')
+
+    const navigation = await book.loaded.navigation
+    const rawToc = navigation.toc
+
+    const newChapters: string[] = []
+    const newHrefs: string[] = []
+
+    // @ts-expect-error
+    const spineItems = book.spine.spineItems as any[]
+    console.log(`[Importer] Found ${spineItems.length} chapters.`)
+
+    for (let i = 0; i < spineItems.length; i++) {
+      const item = spineItems[i]
+      try {
+        const target = item.href
+        if (!target) continue
+
+        const doc = (await book.load(target)) as Document | string
+        let dom: Document
+        if (typeof doc === 'string') {
+          const parser = new DOMParser()
+          dom = parser.parseFromString(doc, 'application/xhtml+xml')
+        } else {
+          dom = doc
+        }
+
+        // Cleanup
+        dom.querySelectorAll('style, script, link, meta, title, head').forEach((el) => el.remove())
+
+        // Images
+        const images = Array.from(dom.querySelectorAll('img, image'))
+        for (const img of images) {
+          const src = img.getAttribute('src') || img.getAttribute('href') || ''
+          if (src) {
+            try {
+              // @ts-expect-error
+              const absolute = book.path.resolve(src, item.href)
+              // @ts-expect-error
+              const url = await book.archive.createUrl(absolute)
+              if (url) {
+                const marker = ` [[[IMG_MARKER:${url}]]] `
+                const textNode = document.createTextNode(marker)
+                img.parentNode?.replaceChild(textNode, img)
+              }
+            } catch (err) {
+              // Silently ignore missing images to keep logs clean
+            }
+          }
+        }
+
+        // Text Extraction
+        const contentParts: string[] = []
+        const elements = dom.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, blockquote, pre')
+
+        if (elements.length > 0) {
+          elements.forEach((el) => {
+            let text = el.textContent || ''
+            text = text.trim()
+            if (!text) return
+            if (/^\d+$/.test(text)) return
+            if (text.toLowerCase().includes('copyright')) return
+
+            if (text.includes('[[[IMG_MARKER')) {
+              contentParts.push(text)
+              return
+            }
+            text = text.replace(/\s+/g, ' ')
+            contentParts.push(text)
+          })
+        } else {
+          contentParts.push(dom.body.textContent || '')
+        }
+
+        const fullText = contentParts.join('\n\n')
+        newChapters.push(fullText.trim())
+        newHrefs.push(target)
+      } catch (err) {
+        console.warn('Chapter parse warning:', err)
+      }
+    }
+
+    setRawChapters(newChapters)
+    setChapterHrefs(newHrefs)
+    // @ts-expect-error
+    setToc(rawToc)
+
+    return { title: metadata.title || 'Unknown Book' }
+  }
+
+  // 1. IMPORT FROM FILE DIALOG (Returns info for saving)
+  const importBook = async (returnDetails = false) => {
     try {
       setIsLoading(true)
       setError(null)
 
       const filePath = await window.api.openFileDialog()
-      if (!filePath) return
+      if (!filePath) return null
 
       const fileBuffer = await window.api.readFile(filePath)
       const rawData = new Uint8Array(fileBuffer)
@@ -47,110 +142,44 @@ export function useBookImporter() {
         rawData.byteOffset + rawData.byteLength
       ) as ArrayBuffer
 
-      const book = ePub(cleanBuffer)
-      await book.ready
+      const { title } = await parseEpubData(cleanBuffer)
 
-      const metadata = await book.loaded.metadata
-      setBookTitle(metadata.title || 'Unknown Book')
-
-      const navigation = await book.loaded.navigation
-      const rawToc = navigation.toc
-
-      const newChapters: string[] = []
-      const newHrefs: string[] = []
-
-      // @ts-expect-error
-      const spineItems = book.spine.spineItems as any[]
-
-      console.log(`[Importer] Found ${spineItems.length} chapters.`)
-
-      for (let i = 0; i < spineItems.length; i++) {
-        const item = spineItems[i]
-        try {
-          const target = item.href
-          if (!target) continue
-
-          const doc = (await book.load(target)) as Document | string
-          let dom: Document
-          if (typeof doc === 'string') {
-            const parser = new DOMParser()
-            dom = parser.parseFromString(doc, 'application/xhtml+xml')
-          } else {
-            dom = doc
-          }
-
-          // Cleanup
-          dom
-            .querySelectorAll('style, script, link, meta, title, head')
-            .forEach((el) => el.remove())
-
-          // Images
-          const images = Array.from(dom.querySelectorAll('img, image'))
-          for (const img of images) {
-            const src = img.getAttribute('src') || img.getAttribute('href') || ''
-            if (src) {
-              try {
-                // @ts-expect-error
-                const absolute = book.path.resolve(src, item.href)
-                // @ts-expect-error
-                const url = await book.archive.createUrl(absolute)
-                const marker = ` [[[IMG_MARKER:${url}]]] `
-                const textNode = document.createTextNode(marker)
-                img.parentNode?.replaceChild(textNode, img)
-              } catch (err) {
-                console.warn(err)
-              }
-            }
-          }
-
-          // Extraction
-          const contentParts: string[] = []
-          const elements = dom.querySelectorAll(
-            'p, div, h1, h2, h3, h4, h5, h6, li, blockquote, pre'
-          )
-
-          if (elements.length > 0) {
-            elements.forEach((el) => {
-              let text = el.textContent || ''
-              text = text.trim()
-              if (!text) return
-              if (/^\d+$/.test(text)) return
-              if (text.toLowerCase().includes('copyright')) return
-
-              if (text.includes('[[[IMG_MARKER')) {
-                contentParts.push(text)
-                return
-              }
-              text = text.replace(/\s+/g, ' ')
-              contentParts.push(text)
-            })
-          } else {
-            contentParts.push(dom.body.textContent || '')
-          }
-
-          const fullText = contentParts.join('\n\n')
-          const cleanText = fullText.trim()
-
-          newChapters.push(cleanText)
-          newHrefs.push(target)
-        } catch (err) {
-          console.warn(err)
-        }
+      // Return details if requested (for the "Save to Library" feature)
+      if (returnDetails) {
+        return { filePath, title }
       }
-
-      setRawChapters(newChapters)
-      setChapterHrefs(newHrefs)
-      // @ts-expect-error
-      setToc(rawToc)
     } catch (e: any) {
       console.error(e)
       setError('Import Error: ' + e.message)
+      return null
     } finally {
       setIsLoading(false)
     }
   }
 
-  // --- 2. STRUCTURE & PAGINATION ENGINE ---
+  // 2. LOAD FROM SAVED PATH (For clicking a book on shelf)
+  const loadBookByPath = async (filePath: string) => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const fileBuffer = await window.api.readFile(filePath)
+      const rawData = new Uint8Array(fileBuffer)
+      const cleanBuffer = rawData.buffer.slice(
+        rawData.byteOffset,
+        rawData.byteOffset + rawData.byteLength
+      ) as ArrayBuffer
+
+      await parseEpubData(cleanBuffer)
+    } catch (e: any) {
+      console.error(e)
+      setError('Could not load book: ' + e.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // --- STRUCTURE & PAGINATION ENGINE ---
   const bookStructure = useMemo(() => {
     const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
     const allSentences: string[] = []
@@ -206,16 +235,13 @@ export function useBookImporter() {
         }
       })
 
-      // PAGINATION LOGIC
+      // Pagination
       let currentPage: VisualBlock[] = []
       let currentLength = 0
 
       chapterBlocks.forEach((block) => {
         const blockLength = block.content.join(' ').length
-
-        // CHECK 1: Character Limit (1500 chars)
         const isFullText = currentLength + blockLength > CHARS_PER_PAGE
-        // CHECK 2: Block Limit (12 paragraphs) - This fixes the long list issue!
         const isFullBlocks = currentPage.length >= MAX_BLOCKS_PER_PAGE
 
         if ((isFullText || isFullBlocks) && currentPage.length > 0) {
@@ -239,14 +265,12 @@ export function useBookImporter() {
       }
     })
 
-    // PROCESS TABLE OF CONTENTS
+    // Process ToC
     const processedToc: TocItem[] = []
-
     const processTocItems = (items: any[]) => {
       items.forEach((item) => {
         const cleanHref = item.href.split('#')[0]
         const chapterIdx = chapterHrefs.findIndex((h) => h.includes(cleanHref))
-
         if (chapterIdx !== -1) {
           processedToc.push({
             label: item.label.trim(),
@@ -254,15 +278,10 @@ export function useBookImporter() {
             pageIndex: chapterStartPages[chapterIdx] || 0
           })
         }
-        if (item.subitems && item.subitems.length > 0) {
-          processTocItems(item.subitems)
-        }
+        if (item.subitems?.length > 0) processTocItems(item.subitems)
       })
     }
-
-    if (toc && Array.isArray(toc)) {
-      processTocItems(toc)
-    }
+    if (toc && Array.isArray(toc)) processTocItems(toc)
 
     return { allSentences, sentenceToPageMap, pagesStructure, processedToc }
   }, [rawChapters, toc, chapterHrefs])
@@ -273,6 +292,7 @@ export function useBookImporter() {
     isLoading,
     error,
     importBook,
+    loadBookByPath, // EXPORTED NOW
     bookStructure
   }
 }
