@@ -6,8 +6,8 @@ import { BookViewer } from '../../bookViewer'
 export default function Library(): React.JSX.Element {
   const [visualPageIndex, setVisualPageIndex] = useState(0)
 
-  // 1. Hooks manage the heavy logic
-  const { bookPages, bookTitle, isLoading, error, importBook, bookStructure } = useBookImporter()
+  // 1. GET totalPages HERE
+  const { totalPages, bookTitle, isLoading, error, importBook, bookStructure } = useBookImporter()
 
   const { isPlaying, globalSentenceIndex, status, play, stop } = useAudioPlayer({
     bookStructure,
@@ -15,12 +15,12 @@ export default function Library(): React.JSX.Element {
     setVisualPageIndex
   })
 
-  // 2. Handlers
-  const handleNextPage = () => setVisualPageIndex((p) => Math.min(bookPages.length - 1, p + 1))
+  // 2. USE totalPages INSTEAD OF bookPages.length
+  const handleNextPage = () => setVisualPageIndex((p) => Math.min(totalPages - 1, p + 1))
   const handlePrevPage = () => setVisualPageIndex((p) => Math.max(0, p - 1))
 
   const handleImport = async () => {
-    stop() // Safety stop before importing
+    stop()
     await importBook()
     setVisualPageIndex(0)
   }
@@ -61,13 +61,15 @@ export default function Library(): React.JSX.Element {
               <div className="font-semibold text-white italic truncate max-w-[200px]">
                 {bookTitle}
               </div>
+              {/* USE totalPages HERE */}
               <div className="text-xs font-mono text-gray-400">
-                Chapter {visualPageIndex + 1} / {bookPages.length}
+                Page {visualPageIndex + 1} / {Math.max(1, totalPages)}
               </div>
             </div>
+            {/* USE totalPages HERE */}
             <button
               onClick={handleNextPage}
-              disabled={visualPageIndex === bookPages.length - 1}
+              disabled={visualPageIndex >= totalPages - 1}
               className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50"
             >
               →
@@ -77,7 +79,8 @@ export default function Library(): React.JSX.Element {
             {!isPlaying ? (
               <button
                 onClick={play}
-                disabled={bookPages.length === 0}
+                // FIX: Check totalPages === 0
+                disabled={totalPages === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold shadow-lg transition-all"
               >
                 <span>▶</span> Read

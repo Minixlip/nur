@@ -5,7 +5,7 @@ interface BookViewerProps {
   bookStructure: {
     allSentences: string[]
     sentenceToPageMap: number[]
-    pagesStructure: VisualBlock[][] // The new structure
+    pagesStructure: VisualBlock[][]
   }
   visualPageIndex: number
   globalSentenceIndex: number
@@ -18,7 +18,6 @@ export const BookViewer: React.FC<BookViewerProps> = ({
   globalSentenceIndex,
   isPlaying
 }) => {
-  // Get the blocks for the current page
   const pageBlocks = bookStructure.pagesStructure[visualPageIndex]
 
   if (!pageBlocks || pageBlocks.length === 0) {
@@ -26,9 +25,9 @@ export const BookViewer: React.FC<BookViewerProps> = ({
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    // Added min-h to prevent layout shift
+    <div className="max-w-3xl mx-auto min-h-[60vh] flex flex-col justify-start">
       {pageBlocks.map((block, blockIdx) => {
-        // RENDER IMAGE
         if (block.type === 'image') {
           const srcMatch = block.content[0].match(/\[\[\[IMG_MARKER:(.*?)\]\]\]/)
           const src = srcMatch ? srcMatch[1] : ''
@@ -37,19 +36,17 @@ export const BookViewer: React.FC<BookViewerProps> = ({
           return (
             <div
               key={blockIdx}
-              className={`my-8 flex justify-center p-2 rounded-lg transition-all duration-500 ${isHighlight ? 'bg-indigo-900/30 ring-2 ring-indigo-500' : ''}`}
+              className={`my-6 flex justify-center p-2 rounded-lg transition-all duration-500 ${isHighlight ? 'bg-indigo-900/30 ring-2 ring-indigo-500' : ''}`}
             >
               <img
                 src={src}
                 alt="Illustration"
-                className="max-w-full max-h-[600px] rounded shadow-lg object-contain"
+                className="max-w-full max-h-[500px] rounded shadow-lg object-contain"
               />
             </div>
           )
         }
 
-        // RENDER PARAGRAPH
-        // We use a <p> tag with margin-bottom to create standard book spacing
         return (
           <p
             key={blockIdx}
