@@ -8,6 +8,7 @@ import os from 'os'
 import { net } from 'electron'
 import { exec, ChildProcess } from 'child_process'
 
+// Track the current player process so we can kill it if the user clicks Stop
 let currentPlayer: ChildProcess | null = null
 
 function createWindow(): void {
@@ -40,9 +41,9 @@ function createWindow(): void {
   }
 }
 
-// 1. GENERATE ONLY (Does not play)
+// 1. GENERATE AUDIO (Returns file path, does not play)
 ipcMain.handle('tts:generate', async (_event, { text }) => {
-  console.log(`[Main] Generating audio for: "${text.substring(0, 15)}..."`)
+  console.log(`[Main] Generating: "${text.substring(0, 15)}..."`)
 
   return new Promise((resolve, reject) => {
     const request = net.request({
@@ -66,6 +67,7 @@ ipcMain.handle('tts:generate', async (_event, { text }) => {
 
       response.on('end', () => {
         const buffer = Buffer.concat(chunks)
+        // Unique ID to prevent overwriting
         const uniqueId = Date.now().toString() + Math.random().toString().slice(2, 5)
         const tempPath = path.join(os.tmpdir(), `nur_seg_${uniqueId}.wav`)
 
@@ -92,10 +94,10 @@ ipcMain.handle('tts:generate', async (_event, { text }) => {
   })
 })
 
-// 2. PLAY FILE (Native)
+// 2. PLAY FILE (Native & Cross-Platform)
 ipcMain.handle('audio:play', async (_event, { filepath }) => {
   return new Promise((resolve, reject) => {
-    // Stop any currently playing audio first
+    // Safety: Stop any existing audio first
     if (currentPlayer) {
       try {
         currentPlayer.kill()
@@ -103,30 +105,33 @@ ipcMain.handle('audio:play', async (_event, { filepath }) => {
     }
 
     const platform = process.platform
-    let playCommand = ''
-    let playArgs: string[] = []
-    let command = ''
+    let fullCommand = ''
 
+    // --- FIX IS HERE: Correctly construct the command string for each OS ---
     if (platform === 'darwin') {
-      command = 'afplay'
-      playArgs = [filepath]
+      // macOS
+      fullCommand = `afplay "${filepath}"`
     } else if (platform === 'win32') {
-      command = 'powershell'
-      playArgs = ['-c', `(New-Object Media.SoundPlayer '${filepath}').PlaySync();`]
+      // Windows: Use PowerShell to play the WAV file silently (no popup window)
+      // We replace single quotes in path to prevent breaking the PS command
+      const safePath = filepath.replace(/'/g, "''")
+      fullCommand = `powershell -c "(New-Object Media.SoundPlayer '${safePath}').PlaySync();"`
     } else {
-      command = 'aplay'
-      playArgs = [filepath]
+      // Linux
+      fullCommand = `aplay "${filepath}"`
     }
 
-    console.log(`[Main] Playing: ${filepath}`)
+    console.log(`[Main] Executing: ${fullCommand}`)
 
-    currentPlayer = exec(`${command} ${playArgs.join(' ')}`, (error) => {
+    // Execute the FULL command string
+    currentPlayer = exec(fullCommand, (error) => {
       currentPlayer = null // Reset when done
+
       if (error && !error.killed) {
         console.error(`[Main] Play error: ${error.message}`)
         reject(error.message)
       } else {
-        // Clean up file after playing
+        // Clean up file to save disk space
         fs.unlink(filepath, () => {})
         resolve('done')
       }
@@ -134,7 +139,7 @@ ipcMain.handle('audio:play', async (_event, { filepath }) => {
   })
 })
 
-// 3. STOP PLAYBACK
+// 3. STOP PLAYBACK (Immediate Kill)
 ipcMain.handle('audio:stop', async () => {
   if (currentPlayer) {
     console.log('[Main] Stopping playback...')
@@ -146,15 +151,20 @@ ipcMain.handle('audio:stop', async () => {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
+
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
+
   createWindow()
+
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (process.platform !== 'darwin') {
+    app.quit()
+  }
 })
