@@ -12,6 +12,7 @@ interface SavedBook {
   path: string
   cover?: string | null // <--- Add this
   dateAdded: string
+  lastPageIndex?: number
 }
 
 export default function Library(): React.JSX.Element {
@@ -116,7 +117,7 @@ export default function Library(): React.JSX.Element {
               className="group relative bg-gray-800 rounded-xl p-4 cursor-pointer hover:bg-gray-750 hover:-translate-y-1 transition-all duration-300 shadow-xl border border-gray-700"
             >
               {/* COVER IMAGE OR PLACEHOLDER */}
-              <div className="aspect-[2/3] bg-indigo-900/50 rounded-lg mb-4 flex items-center justify-center group-hover:bg-indigo-800/50 transition shadow-inner overflow-hidden relative">
+              <div className="aspect-2/3 bg-indigo-900/50 rounded-lg mb-4 flex items-center justify-center group-hover:bg-indigo-800/50 transition shadow-inner overflow-hidden relative">
                 {book.cover ? (
                   <img src={book.cover} alt={book.title} className="w-full h-full object-cover" />
                 ) : (
@@ -124,7 +125,7 @@ export default function Library(): React.JSX.Element {
                 )}
               </div>
 
-              <h3 className="font-bold text-gray-200 line-clamp-2 min-h-[3rem] leading-tight">
+              <h3 className="font-bold text-gray-200 line-clamp-2 min-h-12 leading-tight">
                 {book.title}
               </h3>
               <p className="text-xs text-gray-500 mt-2">
@@ -175,7 +176,7 @@ export default function Library(): React.JSX.Element {
       </div>
 
       {/* READER CONTAINER */}
-      <div className="relative max-w-4xl mx-auto bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 min-h-[600px] flex flex-col">
+      <div className="relative max-w-4xl mx-auto bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 min-h-150 flex flex-col">
         {/* TABLE OF CONTENTS OVERLAY */}
         <TableOfContents
           items={bookStructure.processedToc || []}
@@ -204,7 +205,7 @@ export default function Library(): React.JSX.Element {
               className="text-center px-4 py-1 hover:bg-gray-700/50 rounded cursor-pointer transition"
               title="View Chapters"
             >
-              <div className="font-semibold text-white italic truncate max-w-[200px] md:max-w-[300px]">
+              <div className="font-semibold text-white italic truncate max-w-50 md:max-w-75">
                 {bookTitle}
               </div>
               <div className="text-xs font-mono text-gray-400">

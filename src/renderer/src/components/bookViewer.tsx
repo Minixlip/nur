@@ -44,7 +44,7 @@ export const BookViewer: React.FC<BookViewerProps> = ({
               <img
                 src={src}
                 alt="Illustration"
-                className="max-w-full max-h-[500px] rounded shadow-lg object-contain"
+                className="max-w-full max-h-125 rounded shadow-lg object-contain"
               />
             </div>
           )
