@@ -6,7 +6,7 @@ interface IScanResponse {
 }
 
 interface ICustomAPI {
-  generate: (text: string, speed?: number) => Promise<IScanResponse>
+  generate: (text: string, speed?: number, sessionId: string) => Promise<IScanResponse>
   loadAudio: (filepath: string) => Promise<Uint8Array>
   play: (filepath: string) => Promise<string>
   stop: () => Promise<boolean>
@@ -20,6 +20,7 @@ interface ICustomAPI {
   ) => Promise<{ success: boolean; book?: SavedBook }>
   getLibrary: () => Promise<SavedBook[]>
   deleteBook: (id: string) => Promise<boolean>
+  setSession: (sessionId: string) => Promise<boolean>
 }
 
 interface IElectronAPI {
