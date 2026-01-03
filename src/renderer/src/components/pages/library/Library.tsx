@@ -4,16 +4,9 @@ import { useAudioPlayer } from '../../../hooks/useAudioPlayer'
 import { useLibrary } from '../../../hooks/useLibrary'
 import { BookViewer } from '../../bookViewer'
 import { TableOfContents } from '../../TableOfContents'
+import { SavedBook } from '@renderer/env'
 
 // Updated Interface
-interface SavedBook {
-  id: string
-  title: string
-  path: string
-  cover?: string | null // <--- Add this
-  dateAdded: string
-  lastPageIndex?: number
-}
 
 export default function Library(): React.JSX.Element {
   // --- 1. STATE MANAGEMENT ---

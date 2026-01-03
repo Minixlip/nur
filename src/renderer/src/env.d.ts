@@ -30,13 +30,13 @@ interface IElectronAPI {
   }
 }
 
-export interface SavedBook {
+interface SavedBook {
   id: string
   title: string
   path: string
-  cover?: string | null
+  cover?: string | null // <--- Add this
   dateAdded: string
-  lastPageIndex?: number // <--- New Field
+  lastPageIndex?: number
 }
 
 declare global {
@@ -46,4 +46,4 @@ declare global {
   }
 }
 
-export {}
+export { SavedBook }
