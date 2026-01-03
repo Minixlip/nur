@@ -12,6 +12,14 @@ interface ICustomAPI {
   stop: () => Promise<boolean>
   openFileDialog: () => Promise<string | null>
   readFile: (filepath: string) => Promise<Uint8Array>
+  updateBookProgress: (bookId: string, progress: { lastPageIndex: number }) => Promise<boolean>
+  saveBook: (
+    path: string,
+    title: string,
+    cover: string | null
+  ) => Promise<{ success: boolean; book?: SavedBook }>
+  getLibrary: () => Promise<SavedBook[]>
+  deleteBook: (id: string) => Promise<boolean>
 }
 
 interface IElectronAPI {
@@ -22,18 +30,13 @@ interface IElectronAPI {
   }
 }
 
-interface SavedBook {
+export interface SavedBook {
   id: string
   title: string
   path: string
+  cover?: string | null
   dateAdded: string
-}
-
-interface ICustomAPI {
-  // ... existing methods ...
-  saveBook: (path: string, title: string) => Promise<{ success: boolean; book?: SavedBook }>
-  getLibrary: () => Promise<SavedBook[]>
-  deleteBook: (id: string) => Promise<boolean>
+  lastPageIndex?: number // <--- New Field
 }
 
 declare global {

@@ -131,7 +131,7 @@ export function useBookImporter() {
   }
 
   // CORE LOGIC: Parses an ArrayBuffer into our book structure
-  const parseEpubData = async (buffer: ArrayBuffer, originHref: string = '') => {
+  const parseEpubData = async (buffer: ArrayBuffer) => {
     const book = ePub(buffer)
     await book.ready
 
@@ -300,6 +300,8 @@ export function useBookImporter() {
       if (returnDetails) {
         return { filePath, title, cover }
       }
+
+      return null // <--- ADDED THIS to fix "Not all code paths return a value"
     } catch (e: any) {
       console.error(e)
       setError('Import Error: ' + e.message)
