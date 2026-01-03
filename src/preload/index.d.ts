@@ -17,6 +17,7 @@ declare global {
 
       getLibrary: () => Promise<any[]>
       deleteBook: (id: string) => Promise<boolean>
+      updateBookProgress: (bookId: string, progress: { lastPageIndex: number }) => Promise<boolean>
     }
   }
 }

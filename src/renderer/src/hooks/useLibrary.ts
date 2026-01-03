@@ -5,8 +5,9 @@ export interface SavedBook {
   id: string
   title: string
   path: string
-  cover?: string | null // <--- Add this
+  cover?: string | null
   dateAdded: string
+  lastPageIndex?: number // <--- New Field
 }
 
 export function useLibrary() {
@@ -42,10 +43,19 @@ export function useLibrary() {
     }
   }
 
+  const updateProgress = async (bookId: string, pageIndex: number) => {
+    // Optimistically update local state so UI doesn't lag
+    setLibrary((prev) =>
+      prev.map((b) => (b.id === bookId ? { ...b, lastPageIndex: pageIndex } : b))
+    )
+    // Send to backend
+    await window.api.updateBookProgress(bookId, { lastPageIndex: pageIndex })
+  }
+
   // Load on startup
   useEffect(() => {
     refreshLibrary()
   }, [])
 
-  return { library, loadingLibrary, refreshLibrary, addToLibrary, removeBook }
+  return { library, loadingLibrary, refreshLibrary, addToLibrary, removeBook, updateProgress }
 }

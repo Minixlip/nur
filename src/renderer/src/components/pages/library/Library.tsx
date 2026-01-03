@@ -16,7 +16,10 @@ interface SavedBook {
 
 export default function Library(): React.JSX.Element {
   // --- 1. STATE MANAGEMENT ---
-  const { library, addToLibrary, removeBook } = useLibrary()
+  const { library, addToLibrary, removeBook, updateProgress } = useLibrary()
+  // Track the currently active book ID so we know what to update
+  const [activeBookId, setActiveBookId] = useState<string | null>(null)
+
   const [viewMode, setViewMode] = useState<'shelf' | 'reader'>('shelf')
 
   const [visualPageIndex, setVisualPageIndex] = useState(0)
@@ -35,8 +38,26 @@ export default function Library(): React.JSX.Element {
   // --- 3. HANDLERS ---
 
   // Navigation
-  const handleNextPage = () => setVisualPageIndex((p) => Math.min(totalPages - 1, p + 1))
-  const handlePrevPage = () => setVisualPageIndex((p) => Math.max(0, p - 1))
+  const handleNextPage = () => {
+    setVisualPageIndex((p) => {
+      const newPage = Math.min(totalPages - 1, p + 1)
+      if (activeBookId) updateProgress(activeBookId, newPage)
+      return newPage
+    })
+  }
+  const handlePrevPage = () => {
+    setVisualPageIndex((p) => {
+      const newPage = Math.max(0, p - 1)
+      if (activeBookId) updateProgress(activeBookId, newPage)
+      return newPage
+    })
+  }
+
+  // Also handle chapter clicks from Table of Contents
+  const handleChapterClick = (pageIndex: number) => {
+    setVisualPageIndex(pageIndex)
+    if (activeBookId) updateProgress(activeBookId, pageIndex)
+  }
 
   // Import New Book (Clicking "+ Add Book")
   const handleImportNew = async () => {
@@ -53,18 +74,21 @@ export default function Library(): React.JSX.Element {
     }
   }
 
-  // Open Existing Book (Clicking a card)
+  // UPDATED: Open Book restores progress
   const openBook = async (book: SavedBook) => {
-    setVisualPageIndex(0)
+    setActiveBookId(book.id) // Track ID
+
+    // Restore location (default to 0 if new)
+    setVisualPageIndex(book.lastPageIndex || 0)
+
     setIsTocOpen(false)
     setViewMode('reader')
-    // Load the file content
     await loadBookByPath(book.path)
   }
 
-  // Return to Library
   const goBackToShelf = () => {
     stop()
+    setActiveBookId(null) // Clear ID
     setViewMode('shelf')
   }
 
@@ -158,7 +182,7 @@ export default function Library(): React.JSX.Element {
           isOpen={isTocOpen}
           onClose={() => setIsTocOpen(false)}
           currentVisualPage={visualPageIndex}
-          onChapterClick={(pageIndex) => setVisualPageIndex(pageIndex)}
+          onChapterClick={handleChapterClick}
         />
 
         {/* TOOLBAR */}
@@ -239,7 +263,7 @@ export default function Library(): React.JSX.Element {
               visualPageIndex={visualPageIndex}
               globalSentenceIndex={globalSentenceIndex}
               isPlaying={isPlaying}
-              onChapterClick={(pageIndex) => setVisualPageIndex(pageIndex)}
+              onChapterClick={handleChapterClick}
             />
           )}
         </div>

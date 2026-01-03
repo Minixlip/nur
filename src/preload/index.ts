@@ -17,7 +17,10 @@ const api = {
     ipcRenderer.invoke('save-book', path, title, cover),
 
   getLibrary: () => ipcRenderer.invoke('get-library'),
-  deleteBook: (id: string) => ipcRenderer.invoke('delete-book', id)
+  deleteBook: (id: string) => ipcRenderer.invoke('delete-book', id),
+
+  updateBookProgress: (bookId: string, progress: any) =>
+    ipcRenderer.invoke('update-book-progress', bookId, progress)
 }
 
 if (process.contextIsolated) {

@@ -87,5 +87,24 @@ export function setupLibraryHandlers() {
     return true
   })
 
+  // --- UPDATE BOOK PROGRESS ---
+  ipcMain.handle('update-book-progress', async (_, bookId, progress) => {
+    try {
+      const books = readDb()
+      const bookIndex = books.findIndex((b: any) => b.id === bookId)
+
+      if (bookIndex !== -1) {
+        // Update the specific fields (e.g., page index, percentage)
+        books[bookIndex] = { ...books[bookIndex], ...progress }
+        writeDb(books)
+        return true
+      }
+      return false
+    } catch (err) {
+      console.error('Update Error:', err)
+      return false
+    }
+  })
+
   console.log('📚 Library handlers initialized at:', LIBRARY_PATH)
 }
