@@ -193,6 +193,14 @@ export function useBookImporter() {
           try {
             // A. INLINE SVG
             if (tagName === 'svg') {
+              // --- CRITICAL FIX START ---
+              // If the SVG is just a wrapper for an image (common for covers),
+              // SKIP processing the SVG. Let the loop find the inner <image> tag instead.
+              if (el.querySelector('image, img')) {
+                continue
+              }
+              // --- CRITICAL FIX END ---
+
               const serializer = new XMLSerializer()
               const svgString = serializer.serializeToString(el)
               const b64 = window.btoa(unescape(encodeURIComponent(svgString)))
