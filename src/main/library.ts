@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from 'uuid'
 
 export function setupLibraryHandlers() {
   // 1. DEFINE PATHS
-  // We define them inside the function to ensure 'app' is ready
   const LIBRARY_PATH = path.join(app.getPath('userData'), 'library')
   const DB_PATH = path.join(LIBRARY_PATH, 'books.json')
 
@@ -31,7 +30,8 @@ export function setupLibraryHandlers() {
   // 4. REGISTER HANDLERS
 
   // --- SAVE BOOK ---
-  ipcMain.handle('save-book', async (_, originalPath, title) => {
+  // Updated to accept 'cover' (Base64 string)
+  ipcMain.handle('save-book', async (_, originalPath, title, cover) => {
     try {
       const books = readDb()
 
@@ -47,6 +47,7 @@ export function setupLibraryHandlers() {
         id,
         title: title || 'Unknown Book',
         path: destinationPath,
+        cover: cover || null, // <--- SAVE THE COVER HERE
         dateAdded: new Date().toISOString()
       }
 

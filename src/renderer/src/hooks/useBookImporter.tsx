@@ -51,23 +51,19 @@ const getZipFile = (zip: any, path: string) => {
   if (file) return file
 
   // 4. ROBUST FALLBACK: Search all files in zip for suffix match
-  // Often the epub structure is 'OEBPS/Images/img.jpg' but we are looking for 'Images/img.jpg'
   if (zip.files) {
     const allFiles = Object.keys(zip.files)
     for (const zipPath of allFiles) {
       if (zipPath.endsWith(cleanPath) || zipPath.endsWith(decoded)) {
-        // Strict check: Ensure we aren't matching "cover.jpg" to "back_cover.jpg" inadvertently
-        // by checking if the path separator exists or it's an exact match
+        // Strict check: match filename exactly
         const parts = zipPath.split('/')
         const cleanParts = cleanPath.split('/')
         if (parts[parts.length - 1] === cleanParts[cleanParts.length - 1]) {
-          // console.log(`[Importer] Fuzzy match found: requested "${path}" -> found "${zipPath}"`)
           return zip.file(zipPath)
         }
       }
     }
   }
-
   return null
 }
 
@@ -131,7 +127,6 @@ export function useBookImporter() {
 
       return childText
     }
-
     return ''
   }
 
@@ -143,13 +138,11 @@ export function useBookImporter() {
     const metadata = await book.loaded.metadata
     setBookTitle(metadata.title || 'Unknown Book')
 
-    // --- NEW: EXPLICIT COVER EXTRACTION ---
+    // --- 1. EXTRACT COVER ---
     let coverDataUri: string | null = null
     try {
-      // 1. Get Cover Path from Metadata
       const coverPath = await book.loaded.cover
       if (coverPath) {
-        // 2. Find file in Zip
         // @ts-expect-error
         const zipFile = getZipFile(book.archive.zip, coverPath)
         if (zipFile) {
@@ -162,7 +155,6 @@ export function useBookImporter() {
     } catch (err) {
       console.warn('[Importer] Failed to extract cover:', err)
     }
-    // -------------------------------------
 
     const navigation = await book.loaded.navigation
     const rawToc = navigation.toc
@@ -189,7 +181,7 @@ export function useBookImporter() {
           dom = doc
         }
 
-        // 1. PROCESS IMAGES (Extract & Embed Base64)
+        // --- 2. PROCESS IMAGES ---
         const mediaElements = Array.from(dom.querySelectorAll('img, image, svg, object'))
 
         for (const el of mediaElements) {
@@ -199,14 +191,14 @@ export function useBookImporter() {
           let dataUri: string | null = null
 
           try {
-            // --- CASE A: INLINE SVG ---
+            // A. INLINE SVG
             if (tagName === 'svg') {
               const serializer = new XMLSerializer()
               const svgString = serializer.serializeToString(el)
               const b64 = window.btoa(unescape(encodeURIComponent(svgString)))
               dataUri = `data:image/svg+xml;base64,${b64}`
             }
-            // --- CASE B: EXTERNAL FILES ---
+            // B. FILES (img, object)
             else {
               let src = ''
               if (tagName === 'object') {
@@ -223,33 +215,23 @@ export function useBookImporter() {
                 // @ts-expect-error
                 const absolute = book.path.resolve(src, item.href)
 
-                // SPECIAL CHECK: Is this the cover?
-                // If we already have the cover data, and this image *looks* like the cover
-                // (either by path match or if it's the very first image of the book), use the verified data.
-                let zipFile: any = null
-
-                // If it matches the cover path we found earlier
+                // Try standard lookup
                 // @ts-expect-error
-                if (coverDataUri && absolute.includes(await book.loaded.cover)) {
-                  dataUri = coverDataUri
-                } else {
-                  // Standard Lookup
-                  // @ts-expect-error
-                  zipFile = getZipFile(book.archive.zip, absolute)
+                let zipFile = getZipFile(book.archive.zip, absolute)
 
-                  if (zipFile) {
-                    const b64 = await zipFile.async('base64')
-                    const mime = getMimeType(absolute)
-                    dataUri = `data:${mime};base64,${b64}`
+                if (zipFile) {
+                  const b64 = await zipFile.async('base64')
+                  const mime = getMimeType(absolute)
+                  dataUri = `data:${mime};base64,${b64}`
+                } else {
+                  // --- AGGRESSIVE FALLBACK ---
+                  // If lookup failed, and we have a cover, and we are in the first 2 chapters:
+                  // Just use the cover. This fixes the "Shadow Outline" on title pages.
+                  if (i < 2 && coverDataUri) {
+                    console.log(`[Importer] Missing image at ${src}. Injecting Cover instead.`)
+                    dataUri = coverDataUri
                   } else {
-                    // FALLBACK: If this is the FIRST chapter and FIRST image, and we have a cover, use it.
-                    // This fixes the "Shadow Outline" if the src path was weird but it really is the cover.
-                    if (i === 0 && mediaElements.indexOf(el) === 0 && coverDataUri) {
-                      console.log('[Importer] Using metadata cover for broken first image.')
-                      dataUri = coverDataUri
-                    } else {
-                      console.warn(`[Importer] Image not found in zip: ${absolute}`)
-                    }
+                    console.warn(`[Importer] Image not found: ${absolute}`)
                   }
                 }
               }
@@ -266,7 +248,7 @@ export function useBookImporter() {
           }
         }
 
-        // 2. EXTRACT TEXT
+        // --- 3. EXTRACT TEXT ---
         let fullText = extractContentRecursively(dom.body)
         fullText = fullText.replace(/\n\s+\n/g, '\n\n').trim()
 
@@ -282,14 +264,13 @@ export function useBookImporter() {
     // @ts-expect-error
     setToc(rawToc)
 
-    // Return the cover to the caller (so Library can use it)
     return {
       title: metadata.title || 'Unknown Book',
       cover: coverDataUri
     }
   }
 
-  // 1. IMPORT FROM FILE DIALOG
+  // IMPORT HANDLER
   const importBook = async (returnDetails = false) => {
     try {
       setIsLoading(true)
@@ -305,7 +286,7 @@ export function useBookImporter() {
         rawData.byteOffset + rawData.byteLength
       ) as ArrayBuffer
 
-      // NOW we receive the cover here
+      // Get Title AND Cover
       const { title, cover } = await parseEpubData(cleanBuffer)
 
       if (returnDetails) {
@@ -320,7 +301,7 @@ export function useBookImporter() {
     }
   }
 
-  // 2. LOAD FROM SAVED PATH
+  // LOAD HANDLER
   const loadBookByPath = async (filePath: string) => {
     try {
       setIsLoading(true)
@@ -342,19 +323,16 @@ export function useBookImporter() {
     }
   }
 
-  // --- STRUCTURE & PAGINATION ENGINE ---
   const bookStructure = useMemo(() => {
     const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
     const allSentences: string[] = []
     const sentenceToPageMap: number[] = []
     const pagesStructure: VisualBlock[][] = []
-
     const chapterStartPages: number[] = []
     let globalSentenceIndex = 0
 
     rawChapters.forEach((chapterText, chapterIdx) => {
       chapterStartPages[chapterIdx] = pagesStructure.length
-
       const rawBlocks = chapterText.split(/(\[\[\[IMG_MARKER:.*?\]\]\]|\n\n)/g)
       const chapterBlocks: VisualBlock[] = []
 
@@ -428,7 +406,6 @@ export function useBookImporter() {
       }
     })
 
-    // Process ToC
     const processedToc: TocItem[] = []
     const processTocItems = (items: any[]) => {
       items.forEach((item) => {

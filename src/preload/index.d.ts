@@ -4,8 +4,19 @@ declare global {
   interface Window {
     electron: ElectronAPI
     api: {
-      // Define our new function here
-      generateSpeech: (text: string, modelPath: string) => Promise<string>
+      generate: (text: string, speed?: number) => Promise<any>
+      loadAudio: (filepath: string) => Promise<any>
+      play: (filepath: string) => Promise<void>
+      stop: () => Promise<void>
+
+      openFileDialog: () => Promise<string | null>
+      readFile: (filepath: string) => Promise<ArrayBuffer>
+
+      // UPDATE: Definition matches implementation
+      saveBook: (path: string, title: string, cover: string | null) => Promise<any>
+
+      getLibrary: () => Promise<any[]>
+      deleteBook: (id: string) => Promise<boolean>
     }
   }
 }

@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react'
 
+// Define the shape of a book (optional but good for TS)
+export interface SavedBook {
+  id: string
+  title: string
+  path: string
+  cover?: string | null // <--- Add this
+  dateAdded: string
+}
+
 export function useLibrary() {
   const [library, setLibrary] = useState<SavedBook[]>([])
   const [loadingLibrary, setLoadingLibrary] = useState(true)
@@ -19,8 +28,9 @@ export function useLibrary() {
     }
   }
 
-  const addToLibrary = async (filePath: string, title: string) => {
-    await window.api.saveBook(filePath, title)
+  // UPDATE: Accept cover argument
+  const addToLibrary = async (filePath: string, title: string, cover: string | null) => {
+    await window.api.saveBook(filePath, title, cover)
     await refreshLibrary()
   }
 

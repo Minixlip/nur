@@ -2,14 +2,15 @@ import React, { useState } from 'react'
 import { useBookImporter } from '../../../hooks/useBookImporter'
 import { useAudioPlayer } from '../../../hooks/useAudioPlayer'
 import { useLibrary } from '../../../hooks/useLibrary'
-import { BookViewer } from '../../BookViewer'
+import { BookViewer } from '../../bookViewer'
 import { TableOfContents } from '../../TableOfContents'
 
-// Define the shape of our saved book to satisfy TypeScript
+// Updated Interface
 interface SavedBook {
   id: string
   title: string
   path: string
+  cover?: string | null // <--- Add this
   dateAdded: string
 }
 
@@ -42,8 +43,9 @@ export default function Library(): React.JSX.Element {
     // 1. Open Dialog & Parse
     const bookData = await importBook(true)
     if (bookData) {
-      // 2. Save to DB
-      await addToLibrary(bookData.filePath, bookData.title)
+      // 2. Save to DB (PASSING THE COVER NOW)
+      await addToLibrary(bookData.filePath, bookData.title, bookData.cover || null)
+
       // 3. Reset Reader & Switch View
       setVisualPageIndex(0)
       setIsTocOpen(false)
@@ -89,9 +91,13 @@ export default function Library(): React.JSX.Element {
               onClick={() => openBook(book)}
               className="group relative bg-gray-800 rounded-xl p-4 cursor-pointer hover:bg-gray-750 hover:-translate-y-1 transition-all duration-300 shadow-xl border border-gray-700"
             >
-              {/* Placeholder Cover Icon */}
-              <div className="aspect-[2/3] bg-indigo-900/50 rounded-lg mb-4 flex items-center justify-center group-hover:bg-indigo-800/50 transition shadow-inner">
-                <span className="text-4xl">📖</span>
+              {/* COVER IMAGE OR PLACEHOLDER */}
+              <div className="aspect-[2/3] bg-indigo-900/50 rounded-lg mb-4 flex items-center justify-center group-hover:bg-indigo-800/50 transition shadow-inner overflow-hidden relative">
+                {book.cover ? (
+                  <img src={book.cover} alt={book.title} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-4xl">📖</span>
+                )}
               </div>
 
               <h3 className="font-bold text-gray-200 line-clamp-2 min-h-[3rem] leading-tight">
@@ -104,7 +110,7 @@ export default function Library(): React.JSX.Element {
               {/* Delete Button (Visible on Hover) */}
               <button
                 onClick={(e) => removeBook(book.id, e)}
-                className="absolute top-2 right-2 bg-red-600/80 hover:bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                className="absolute top-2 right-2 bg-red-600/80 hover:bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
                 title="Delete Book"
               >
                 ✕

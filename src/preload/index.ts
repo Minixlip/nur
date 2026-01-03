@@ -7,10 +7,15 @@ const api = {
   loadAudio: (filepath: string) => ipcRenderer.invoke('audio:load', { filepath }),
   play: (filepath: string) => ipcRenderer.invoke('audio:play', { filepath }),
   stop: () => ipcRenderer.invoke('audio:stop'),
-  // NEW:
+
+  // FILE SYSTEM & LIBRARY
   openFileDialog: () => ipcRenderer.invoke('dialog:openFile'),
   readFile: (filepath: string) => ipcRenderer.invoke('fs:readFile', { filepath }),
-  saveBook: (path: string, title: string) => ipcRenderer.invoke('save-book', path, title),
+
+  // UPDATE: Accept 'cover' argument here
+  saveBook: (path: string, title: string, cover: string | null) =>
+    ipcRenderer.invoke('save-book', path, title, cover),
+
   getLibrary: () => ipcRenderer.invoke('get-library'),
   deleteBook: (id: string) => ipcRenderer.invoke('delete-book', id)
 }
