@@ -4,7 +4,8 @@ declare global {
   interface Window {
     electron: ElectronAPI
     api: {
-      generate: (text: string, speed?: number) => Promise<any>
+      generate: (text: string, speed?: number, sessionId?: string) => Promise<any>
+      setSession: (sessionId: string) => Promise<boolean>
       loadAudio: (filepath: string) => Promise<any>
       play: (filepath: string) => Promise<void>
       stop: () => Promise<void>

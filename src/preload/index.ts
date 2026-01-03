@@ -2,20 +2,17 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
-  generate: (text: string, speed: number = 1.0) =>
-    ipcRenderer.invoke('tts:generate', { text, speed }),
+  generate: (text: string, speed: number = 1.0, sessionId: string = '') =>
+    ipcRenderer.invoke('tts:generate', { text, speed, sessionId }),
+  // New function
+  setSession: (sessionId: string) => ipcRenderer.invoke('tts:setSession', sessionId),
   loadAudio: (filepath: string) => ipcRenderer.invoke('audio:load', { filepath }),
   play: (filepath: string) => ipcRenderer.invoke('audio:play', { filepath }),
   stop: () => ipcRenderer.invoke('audio:stop'),
-
-  // FILE SYSTEM & LIBRARY
   openFileDialog: () => ipcRenderer.invoke('dialog:openFile'),
   readFile: (filepath: string) => ipcRenderer.invoke('fs:readFile', { filepath }),
-
-  // UPDATE: Accept 'cover' argument here
   saveBook: (path: string, title: string, cover: string | null) =>
     ipcRenderer.invoke('save-book', path, title, cover),
-
   getLibrary: () => ipcRenderer.invoke('get-library'),
   deleteBook: (id: string) => ipcRenderer.invoke('delete-book', id),
 

@@ -21,11 +21,14 @@ interface AudioBatch {
   globalIndices: number[]
 }
 
+interface HighlightTrigger {
+  time: number
+  globalIndex: number
+}
+
 // --- CONSTANTS ---
-// We use a "Ramp-up" strategy.
-// Start small for speed, then get bigger for flow.
-const BATCH_SIZE_START = 15 // Very fast first chunk
-const BATCH_SIZE_STANDARD = 35 // Reduced from 40 to avoid 250 char warning
+const BATCH_RAMP = [15, 20, 25]
+const BATCH_SIZE_STANDARD = 35
 
 // --- HELPER: Time Estimator ---
 const estimateSentenceDurations = (sentences: string[], totalDuration: number) => {
@@ -40,32 +43,65 @@ export function useAudioPlayer({
   setVisualPageIndex
 }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isPaused, setIsPaused] = useState(false) // <--- NEW STATE
   const [globalSentenceIndex, setGlobalSentenceIndex] = useState(-1)
   const [status, setStatus] = useState('Idle')
 
   const isPlayingRef = useRef(false)
+  const isPausedRef = useRef(false) // <--- NEW REF (for loops)
   const stopSignalRef = useRef(false)
+
   const audioCtxRef = useRef<AudioContext | null>(null)
   const nextStartTimeRef = useRef(0)
-  const playbackTimeoutsRef = useRef<NodeJS.Timeout[]>([])
+  const highlightScheduleRef = useRef<HighlightTrigger[]>([]) // <--- NEW: Central Schedule
+
+  // Session Tracking
+  const currentSessionId = useRef<string>('')
 
   const initAudioContext = () => {
     if (!audioCtxRef.current) {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext
       audioCtxRef.current = new AudioContext()
     }
+    // Always ensure it's running when we init
     if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume()
+  }
+
+  // --- CONTROLS ---
+
+  const pause = async () => {
+    if (!isPlayingRef.current || isPausedRef.current) return
+    console.log('Pausing...')
+
+    // 1. Update State
+    isPausedRef.current = true
+    setIsPaused(true)
+
+    // 2. Freeze Hardware
+    if (audioCtxRef.current) {
+      await audioCtxRef.current.suspend()
+    }
+    setStatus('Paused')
   }
 
   const stop = async () => {
     console.log('Stopping...')
     stopSignalRef.current = true
     isPlayingRef.current = false
-    setIsPlaying(false)
-    setStatus('Stopped')
+    isPausedRef.current = false
 
-    playbackTimeoutsRef.current.forEach((id) => clearTimeout(id))
-    playbackTimeoutsRef.current = []
+    // 1. INVALIDATE SESSION
+    currentSessionId.current = ''
+    await window.api.setSession('')
+
+    // 2. RESET STATE
+    setIsPlaying(false)
+    setIsPaused(false)
+    setStatus('Stopped')
+    setGlobalSentenceIndex(-1)
+
+    // 3. CLEANUP
+    highlightScheduleRef.current = [] // Clear highlighting queue
 
     if (audioCtxRef.current) {
       try {
@@ -80,11 +116,27 @@ export function useAudioPlayer({
   }
 
   const play = async () => {
+    // A. RESUME IF PAUSED
+    if (isPausedRef.current) {
+      console.log('Resuming...')
+      isPausedRef.current = false
+      setIsPaused(false)
+      if (audioCtxRef.current) {
+        await audioCtxRef.current.resume()
+      }
+      setStatus('Resuming...')
+      return
+    }
+
+    // B. START FRESH
     if (isPlayingRef.current) return
 
     stopSignalRef.current = false
     isPlayingRef.current = true
+    isPausedRef.current = false // Ensure not paused
     setIsPlaying(true)
+    setIsPaused(false)
+
     initAudioContext()
 
     const ctx = audioCtxRef.current
@@ -92,9 +144,13 @@ export function useAudioPlayer({
 
     nextStartTimeRef.current = ctx.currentTime + 0.1
 
-    // --- 1. BUILD BATCHES (RAMP-UP STRATEGY) ---
-    const batches: AudioBatch[] = []
+    // New Session
+    const newSessionId = Date.now().toString()
+    currentSessionId.current = newSessionId
+    await window.api.setSession(newSessionId)
 
+    // --- BUILD BATCHES ---
+    const batches: AudioBatch[] = []
     const startSentenceIndex = bookStructure.sentenceToPageMap.findIndex(
       (p) => p === visualPageIndex
     )
@@ -105,13 +161,12 @@ export function useAudioPlayer({
     let currentBatchText: string[] = []
     let currentBatchIndices: number[] = []
     let currentWordCount = 0
-    let batchIndex = 0 // Track which batch we are on
+    let batchIndex = 0
 
     for (let i = 0; i < activeSentences.length; i++) {
       const text = activeSentences[i]
       const globalIdx = getGlobalIndex(i)
 
-      // Images break the flow
       if (text.includes('[[[IMG_MARKER')) {
         if (currentBatchText.length > 0) {
           batches.push({
@@ -124,25 +179,17 @@ export function useAudioPlayer({
           currentWordCount = 0
           batchIndex++
         }
-        batches.push({
-          text: '[[[IMAGE]]]',
-          sentences: [text],
-          globalIndices: [globalIdx]
-        })
-        // Do not increment batchIndex for images, or do - doesn't matter much.
+        batches.push({ text: '[[[IMAGE]]]', sentences: [text], globalIndices: [globalIdx] })
         continue
       }
 
       const wordCount = text.split(/\s+/).length
-
       currentBatchText.push(text)
       currentBatchIndices.push(globalIdx)
       currentWordCount += wordCount
 
-      // DYNAMIC TARGET SIZE
-      // Batch 0: ~15 words (Fast start)
-      // Batch 1+: ~35 words (Smooth flow, prevents timeouts)
-      const targetSize = batchIndex === 0 ? BATCH_SIZE_START : BATCH_SIZE_STANDARD
+      const targetSize =
+        batchIndex < BATCH_RAMP.length ? BATCH_RAMP[batchIndex] : BATCH_SIZE_STANDARD
 
       if (currentWordCount >= targetSize) {
         batches.push({
@@ -156,7 +203,6 @@ export function useAudioPlayer({
         batchIndex++
       }
     }
-    // Push leftovers
     if (currentBatchText.length > 0) {
       batches.push({
         text: currentBatchText.join(' '),
@@ -165,34 +211,35 @@ export function useAudioPlayer({
       })
     }
 
-    // --- 2. PIPELINE SETUP ---
+    // --- PIPELINE ---
     const audioPromises: Promise<AudioResult>[] = new Array(batches.length).fill(null)
     const BUFFER_SIZE = 3
 
     const triggerGeneration = (index: number) => {
       if (index >= batches.length) return
       const batch = batches[index]
-
       if (batch.text === '[[[IMAGE]]]') {
         audioPromises[index] = Promise.resolve({ status: 'skipped', audio_data: null })
       } else {
-        audioPromises[index] = window.api.generate(batch.text, 1.2)
+        audioPromises[index] = window.api.generate(batch.text, 1.2, newSessionId)
       }
     }
 
     try {
       setStatus('Buffering...')
-
-      // Start the pipeline
       const initialFetch = Math.min(batches.length, BUFFER_SIZE)
       for (let i = 0; i < initialFetch; i++) triggerGeneration(i)
 
-      // Wait for the FIRST batch only before playing.
-      // Since Batch 0 is small, this should be fast (~2-3s).
       if (batches.length > 0) await audioPromises[0]
 
-      // --- 3. PLAYBACK LOOP ---
+      // --- MAIN LOOP ---
       for (let i = 0; i < batches.length; i++) {
+        // PAUSE CHECK: Freeze loop if paused
+        while (isPausedRef.current) {
+          if (stopSignalRef.current) break
+          await new Promise((r) => setTimeout(r, 200)) // Wait 200ms and check again
+        }
+
         if (stopSignalRef.current) break
 
         const batch = batches[i]
@@ -207,27 +254,26 @@ export function useAudioPlayer({
         }
 
         if (stopSignalRef.current) break
-
-        // Trigger NEXT batch while current one plays
         triggerGeneration(i + BUFFER_SIZE)
 
-        // HANDLE IMAGE
+        // IMAGE
         if (result && result.status === 'skipped') {
           const idx = batch.globalIndices[0]
-          setGlobalSentenceIndex(idx)
-          const page = bookStructure.sentenceToPageMap[idx]
-          setVisualPageIndex((c) => (c !== page ? page : c))
+
+          // Add to schedule immediately
+          const startTime = Math.max(ctx.currentTime, nextStartTimeRef.current)
+          highlightScheduleRef.current.push({ time: startTime, globalIndex: idx })
 
           const imagePause = 2.0
-          nextStartTimeRef.current =
-            Math.max(ctx.currentTime, nextStartTimeRef.current) + imagePause
+          nextStartTimeRef.current = startTime + imagePause
 
+          // Wait physical time so loop doesn't race ahead
           const waitMs = (nextStartTimeRef.current - ctx.currentTime) * 1000
           if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs))
           continue
         }
 
-        // HANDLE AUDIO
+        // AUDIO
         if (result && result.status === 'success' && result.audio_data) {
           try {
             const rawData = result.audio_data
@@ -235,7 +281,6 @@ export function useAudioPlayer({
               rawData.byteOffset,
               rawData.byteOffset + rawData.byteLength
             ) as ArrayBuffer
-
             const audioBuffer = await ctx.decodeAudioData(cleanBuffer)
 
             const source = ctx.createBufferSource()
@@ -246,32 +291,35 @@ export function useAudioPlayer({
             source.start(start)
             nextStartTimeRef.current = start + audioBuffer.duration
 
-            // ESTIMATED HIGHLIGHTING
+            // SCHEDULING (Replaces setTimeout)
             const durations = estimateSentenceDurations(batch.sentences, audioBuffer.duration)
-
             let accumulatedTime = 0
             durations.forEach((dur, idx) => {
-              const globalIndex = batch.globalIndices[idx]
               const triggerTime = start + accumulatedTime
-              const delayMs = (triggerTime - ctx.currentTime) * 1000
-
-              if (delayMs >= 0) {
-                const tid = setTimeout(() => {
-                  if (!stopSignalRef.current) {
-                    setGlobalSentenceIndex(globalIndex)
-                    const page = bookStructure.sentenceToPageMap[globalIndex]
-                    setVisualPageIndex((c) => (c !== page ? page : c))
-                  }
-                }, delayMs)
-                playbackTimeoutsRef.current.push(tid)
-              }
+              highlightScheduleRef.current.push({
+                time: triggerTime,
+                globalIndex: batch.globalIndices[idx]
+              })
               accumulatedTime += dur
             })
 
-            // Optimization: If buffer is healthy, relax the CPU
+            // Sort schedule just in case
+            highlightScheduleRef.current.sort((a, b) => a.time - b.time)
+
+            // Relax CPU
             const timeUntilNext = nextStartTimeRef.current - ctx.currentTime
             if (timeUntilNext > 4) {
-              await new Promise((r) => setTimeout(r, (timeUntilNext - 2) * 1000))
+              // Wait, but respect pause
+              let waitTime = (timeUntilNext - 2) * 1000
+              while (waitTime > 0 && !stopSignalRef.current) {
+                if (isPausedRef.current) {
+                  await new Promise((r) => setTimeout(r, 200))
+                  continue
+                }
+                const chunk = Math.min(waitTime, 200)
+                await new Promise((r) => setTimeout(r, chunk))
+                waitTime -= chunk
+              }
             }
           } catch (decodeErr) {
             console.error('Decode Error', decodeErr)
@@ -282,6 +330,7 @@ export function useAudioPlayer({
       if (!stopSignalRef.current) {
         setStatus('Completed')
         setIsPlaying(false)
+        setIsPaused(false)
         setGlobalSentenceIndex(-1)
       }
     } catch (e: any) {
@@ -293,11 +342,55 @@ export function useAudioPlayer({
     }
   }
 
+  // --- HIGHLIGHT SYNC LOOP (Replaces setTimeout) ---
+  // Checks every 50ms what the current audio time is and updates highlight
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isPlayingRef.current || isPausedRef.current || !audioCtxRef.current) return
+
+      const t = audioCtxRef.current.currentTime
+      const schedule = highlightScheduleRef.current
+
+      if (schedule.length === 0) return
+
+      // Find the latest trigger that has passed
+      let lastPassedIndex = -1
+      for (let i = 0; i < schedule.length; i++) {
+        if (schedule[i].time <= t + 0.05) {
+          // 50ms tolerance
+          lastPassedIndex = i
+        } else {
+          break
+        }
+      }
+
+      if (lastPassedIndex !== -1) {
+        const trigger = schedule[lastPassedIndex]
+
+        // Update Highlight
+        setGlobalSentenceIndex((prev) => {
+          if (prev !== trigger.globalIndex) {
+            // Sync Page
+            const page = bookStructure.sentenceToPageMap[trigger.globalIndex]
+            setVisualPageIndex((c) => (c !== page ? page : c))
+            return trigger.globalIndex
+          }
+          return prev
+        })
+
+        // Cleanup processed items
+        highlightScheduleRef.current = schedule.slice(lastPassedIndex + 1)
+      }
+    }, 50)
+
+    return () => clearInterval(interval)
+  }, [bookStructure]) // Re-create if book changes
+
   useEffect(() => {
     return () => {
       stop()
     }
   }, [])
 
-  return { isPlaying, globalSentenceIndex, status, play, stop }
+  return { isPlaying, isPaused, globalSentenceIndex, status, play, pause, stop }
 }

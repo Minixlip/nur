@@ -57,9 +57,31 @@ ipcMain.handle('dialog:openFile', async () => {
 // --------------------------------
 
 // 1. GENERATE AUDIO
-ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
+// --- 1. SET SESSION (NEW) ---
+ipcMain.handle('tts:setSession', async (_event, sessionId) => {
+  return new Promise((resolve) => {
+    const request = net.request({
+      method: 'POST',
+      protocol: 'http:',
+      hostname: '127.0.0.1',
+      port: 8000,
+      path: '/session'
+    })
+    request.setHeader('Content-Type', 'application/json')
+    request.on('error', (err) => {
+      console.warn('Backend session error:', err.message)
+      resolve(false)
+    })
+    request.on('response', () => resolve(true))
+    request.write(JSON.stringify({ session_id: sessionId }))
+    request.end()
+  })
+})
+
+// --- 2. GENERATE AUDIO (UPDATED) ---
+// Now accepts 'sessionId'
+ipcMain.handle('tts:generate', async (_event, { text, speed, sessionId }) => {
   const safeSpeed = speed || 1.0
-  console.log(`[Main] Requesting: "${text.substring(0, 10)}..."`)
 
   return new Promise((resolve, reject) => {
     const request = net.request({
@@ -73,6 +95,11 @@ ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
     request.setHeader('Content-Type', 'application/json')
 
     request.on('response', (response) => {
+      // 499 = Client Closed Request (Our custom cancellation code)
+      if (response.statusCode === 499) {
+        resolve({ status: 'cancelled', audio_data: null })
+        return
+      }
       if (response.statusCode !== 200) {
         reject(`Python Error: ${response.statusCode}`)
         return
@@ -87,12 +114,14 @@ ipcMain.handle('tts:generate', async (_event, { text, speed }) => {
 
     request.on('error', (err) => reject(err.message))
 
+    // Pass session_id to Python
     request.write(
       JSON.stringify({
         text: text,
         speaker_wav: 'default_speaker.wav',
         language: 'en',
-        speed: safeSpeed
+        speed: safeSpeed,
+        session_id: sessionId // <--- PASSED HERE
       })
     )
 

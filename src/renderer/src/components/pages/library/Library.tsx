@@ -23,7 +23,7 @@ export default function Library(): React.JSX.Element {
   const { totalPages, bookTitle, isLoading, error, importBook, loadBookByPath, bookStructure } =
     useBookImporter()
 
-  const { isPlaying, globalSentenceIndex, status, play, stop } = useAudioPlayer({
+  const { isPlaying, isPaused, globalSentenceIndex, status, play, pause, stop } = useAudioPlayer({
     bookStructure,
     visualPageIndex,
     setVisualPageIndex
@@ -217,30 +217,36 @@ export default function Library(): React.JSX.Element {
 
           {/* Action Controls */}
           <div className="flex gap-2">
-            <button
-              onClick={() => setIsTocOpen(!isTocOpen)}
-              disabled={totalPages === 0}
-              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300"
-              title="Table of Contents"
-            >
-              ☰
-            </button>
-
             {!isPlaying ? (
-              <button
-                onClick={play}
-                disabled={totalPages === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold shadow-lg transition-all text-white"
-              >
+              <button onClick={play} className="...">
                 <span>▶</span> Read
               </button>
             ) : (
-              <button
-                onClick={stop}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg font-bold shadow-lg transition-all text-white"
-              >
-                <span>⏹</span> Stop
-              </button>
+              <>
+                {/* PAUSE / RESUME TOGGLE */}
+                {isPaused ? (
+                  <button
+                    onClick={play}
+                    className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded-lg font-bold"
+                  >
+                    Resume
+                  </button>
+                ) : (
+                  <button
+                    onClick={pause}
+                    className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg font-bold"
+                  >
+                    Pause
+                  </button>
+                )}
+
+                <button
+                  onClick={stop}
+                  className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-bold"
+                >
+                  Stop
+                </button>
+              </>
             )}
           </div>
         </div>
