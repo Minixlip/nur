@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { VisualBlock } from '../types/book'
 
 // --- TYPES ---
 interface AudioResult {
@@ -11,7 +10,6 @@ interface AudioPlayerProps {
   bookStructure: {
     allSentences: string[]
     sentenceToPageMap: number[]
-    pagesStructure: VisualBlock[][]
   }
   visualPageIndex: number
   setVisualPageIndex: React.Dispatch<React.SetStateAction<number>>
@@ -19,59 +17,21 @@ interface AudioPlayerProps {
 
 interface AudioBatch {
   text: string
-  startSentenceIndex: number
-  sentenceCount: number
   sentences: string[]
+  globalIndices: number[]
 }
 
 // --- CONSTANTS ---
-const TARGET_WORDS_PER_BATCH = 40
-const CHUNK_SPACING = 0.1 // 100ms breath between batches
-const SILENCE_THRESHOLD = 0.005
+// We use a "Ramp-up" strategy.
+// Start small for speed, then get bigger for flow.
+const BATCH_SIZE_START = 15 // Very fast first chunk
+const BATCH_SIZE_STANDARD = 35 // Reduced from 40 to avoid 250 char warning
 
-// --- HELPER: Trim Silence ---
-const trimSilence = (ctx: AudioContext, buffer: AudioBuffer): AudioBuffer => {
-  const rawData = buffer.getChannelData(0)
-  const len = rawData.length
-
-  let start = 0
-  while (start < len && Math.abs(rawData[start]) < SILENCE_THRESHOLD) {
-    start++
-  }
-
-  let end = len - 1
-  while (end > start && Math.abs(rawData[end]) < SILENCE_THRESHOLD) {
-    end--
-  }
-
-  if (start >= end) return buffer
-
-  const trimmedLength = end - start + 1
-  const trimmedBuffer = ctx.createBuffer(buffer.numberOfChannels, trimmedLength, buffer.sampleRate)
-
-  for (let i = 0; i < buffer.numberOfChannels; i++) {
-    const channelData = buffer.getChannelData(i).subarray(start, end + 1)
-    trimmedBuffer.copyToChannel(channelData, i)
-  }
-
-  return trimmedBuffer
-}
-
-// --- HELPER: IMPROVED Estimator (Weighted Characters) ---
+// --- HELPER: Time Estimator ---
 const estimateSentenceDurations = (sentences: string[], totalDuration: number) => {
-  const weights = sentences.map((s) => {
-    const charCount = s.length
-    // Heuristic: A punctuation mark is worth ~6 characters of "time" (pause)
-    const punctuationCount = (s.match(/[,.;:!?—]/g) || []).length
-    return charCount + punctuationCount * 6
-  })
-
-  const totalWeight = weights.reduce((a, b) => a + b, 0)
-
-  // Safety check to avoid division by zero
-  if (totalWeight === 0) return sentences.map(() => totalDuration / sentences.length)
-
-  return weights.map((w) => (w / totalWeight) * totalDuration)
+  const wordCounts = sentences.map((s) => Math.max(1, s.trim().split(/\s+/).length))
+  const totalWords = wordCounts.reduce((a, b) => a + b, 0)
+  return wordCounts.map((count) => (count / totalWords) * totalDuration)
 }
 
 export function useAudioPlayer({
@@ -104,10 +64,6 @@ export function useAudioPlayer({
     setIsPlaying(false)
     setStatus('Stopped')
 
-    // Reset timing
-    nextStartTimeRef.current = 0
-
-    // Clear all pending highlights
     playbackTimeoutsRef.current.forEach((id) => clearTimeout(id))
     playbackTimeoutsRef.current = []
 
@@ -119,6 +75,7 @@ export function useAudioPlayer({
         console.error(e)
       }
     }
+
     await window.api.stop()
   }
 
@@ -135,78 +92,82 @@ export function useAudioPlayer({
 
     nextStartTimeRef.current = ctx.currentTime + 0.1
 
-    // 1. CREATE BATCHES
+    // --- 1. BUILD BATCHES (RAMP-UP STRATEGY) ---
     const batches: AudioBatch[] = []
-    let currentBatchSentences: string[] = []
-    let currentBatchWordCount = 0
-    let batchStartIndex = -1
 
-    let startingGlobalIndex = 0
-    // Simple lookup to resume from current page
-    if (visualPageIndex > 0) {
-      const match = bookStructure.sentenceToPageMap.findIndex((p) => p === visualPageIndex)
-      if (match !== -1) startingGlobalIndex = match
-    }
+    const startSentenceIndex = bookStructure.sentenceToPageMap.findIndex(
+      (p) => p === visualPageIndex
+    )
+    const safeStartIndex = startSentenceIndex >= 0 ? startSentenceIndex : 0
+    const activeSentences = bookStructure.allSentences.slice(safeStartIndex)
+    const getGlobalIndex = (localIndex: number) => safeStartIndex + localIndex
 
-    for (let i = startingGlobalIndex; i < bookStructure.allSentences.length; i++) {
-      const sentence = bookStructure.allSentences[i]
+    let currentBatchText: string[] = []
+    let currentBatchIndices: number[] = []
+    let currentWordCount = 0
+    let batchIndex = 0 // Track which batch we are on
 
-      // Handle Image Markers
-      if (sentence.includes('[[[IMG_MARKER')) {
-        if (currentBatchSentences.length > 0) {
+    for (let i = 0; i < activeSentences.length; i++) {
+      const text = activeSentences[i]
+      const globalIdx = getGlobalIndex(i)
+
+      // Images break the flow
+      if (text.includes('[[[IMG_MARKER')) {
+        if (currentBatchText.length > 0) {
           batches.push({
-            text: currentBatchSentences.join(' '),
-            startSentenceIndex: batchStartIndex,
-            sentenceCount: currentBatchSentences.length,
-            sentences: [...currentBatchSentences]
+            text: currentBatchText.join(' '),
+            sentences: [...currentBatchText],
+            globalIndices: [...currentBatchIndices]
           })
-          currentBatchSentences = []
-          currentBatchWordCount = 0
+          currentBatchText = []
+          currentBatchIndices = []
+          currentWordCount = 0
+          batchIndex++
         }
         batches.push({
           text: '[[[IMAGE]]]',
-          startSentenceIndex: i,
-          sentenceCount: 1,
-          sentences: [sentence]
+          sentences: [text],
+          globalIndices: [globalIdx]
         })
+        // Do not increment batchIndex for images, or do - doesn't matter much.
         continue
       }
 
-      // Standard Text
-      const words = sentence.trim().split(/\s+/).length
+      const wordCount = text.split(/\s+/).length
 
-      if (currentBatchSentences.length === 0) {
-        batchStartIndex = i
-      }
+      currentBatchText.push(text)
+      currentBatchIndices.push(globalIdx)
+      currentWordCount += wordCount
 
-      currentBatchSentences.push(sentence)
-      currentBatchWordCount += words
+      // DYNAMIC TARGET SIZE
+      // Batch 0: ~15 words (Fast start)
+      // Batch 1+: ~35 words (Smooth flow, prevents timeouts)
+      const targetSize = batchIndex === 0 ? BATCH_SIZE_START : BATCH_SIZE_STANDARD
 
-      if (currentBatchWordCount >= TARGET_WORDS_PER_BATCH) {
+      if (currentWordCount >= targetSize) {
         batches.push({
-          text: currentBatchSentences.join(' '),
-          startSentenceIndex: batchStartIndex,
-          sentenceCount: currentBatchSentences.length,
-          sentences: [...currentBatchSentences]
+          text: currentBatchText.join(' '),
+          sentences: [...currentBatchText],
+          globalIndices: [...currentBatchIndices]
         })
-        currentBatchSentences = []
-        currentBatchWordCount = 0
+        currentBatchText = []
+        currentBatchIndices = []
+        currentWordCount = 0
+        batchIndex++
       }
     }
-
-    // Add final batch
-    if (currentBatchSentences.length > 0) {
+    // Push leftovers
+    if (currentBatchText.length > 0) {
       batches.push({
-        text: currentBatchSentences.join(' '),
-        startSentenceIndex: batchStartIndex,
-        sentenceCount: currentBatchSentences.length,
-        sentences: [...currentBatchSentences]
+        text: currentBatchText.join(' '),
+        sentences: [...currentBatchText],
+        globalIndices: [...currentBatchIndices]
       })
     }
 
-    // 2. PREPARE PIPELINE
-    const BUFFER_SIZE = 3
+    // --- 2. PIPELINE SETUP ---
     const audioPromises: Promise<AudioResult>[] = new Array(batches.length).fill(null)
+    const BUFFER_SIZE = 3
 
     const triggerGeneration = (index: number) => {
       if (index >= batches.length) return
@@ -215,17 +176,22 @@ export function useAudioPlayer({
       if (batch.text === '[[[IMAGE]]]') {
         audioPromises[index] = Promise.resolve({ status: 'skipped', audio_data: null })
       } else {
-        // Generate audio (adjust speed here if needed, e.g., 1.0 or 1.2)
         audioPromises[index] = window.api.generate(batch.text, 1.2)
       }
     }
 
     try {
       setStatus('Buffering...')
-      const initialBatch = Math.min(batches.length, BUFFER_SIZE)
-      for (let i = 0; i < initialBatch; i++) triggerGeneration(i)
 
-      // 3. PLAYBACK LOOP
+      // Start the pipeline
+      const initialFetch = Math.min(batches.length, BUFFER_SIZE)
+      for (let i = 0; i < initialFetch; i++) triggerGeneration(i)
+
+      // Wait for the FIRST batch only before playing.
+      // Since Batch 0 is small, this should be fast (~2-3s).
+      if (batches.length > 0) await audioPromises[0]
+
+      // --- 3. PLAYBACK LOOP ---
       for (let i = 0; i < batches.length; i++) {
         if (stopSignalRef.current) break
 
@@ -236,27 +202,32 @@ export function useAudioPlayer({
         try {
           result = await audioPromises[i]
         } catch (err) {
-          console.error(err)
+          console.warn('Generation failed', err)
           continue
         }
 
         if (stopSignalRef.current) break
+
+        // Trigger NEXT batch while current one plays
         triggerGeneration(i + BUFFER_SIZE)
 
-        // --- IMAGE HANDLING ---
-        if (batch.text === '[[[IMAGE]]]') {
-          setGlobalSentenceIndex(batch.startSentenceIndex)
-          const pIndex = bookStructure.sentenceToPageMap[batch.startSentenceIndex]
-          if (pIndex !== undefined) setVisualPageIndex((curr) => (curr !== pIndex ? pIndex : curr))
+        // HANDLE IMAGE
+        if (result && result.status === 'skipped') {
+          const idx = batch.globalIndices[0]
+          setGlobalSentenceIndex(idx)
+          const page = bookStructure.sentenceToPageMap[idx]
+          setVisualPageIndex((c) => (c !== page ? page : c))
 
-          const start = Math.max(ctx.currentTime, nextStartTimeRef.current)
-          nextStartTimeRef.current = start + 2.0 // Pause 2s for image
-          const wait = (start - ctx.currentTime) * 1000
-          if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+          const imagePause = 2.0
+          nextStartTimeRef.current =
+            Math.max(ctx.currentTime, nextStartTimeRef.current) + imagePause
+
+          const waitMs = (nextStartTimeRef.current - ctx.currentTime) * 1000
+          if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs))
           continue
         }
 
-        // --- AUDIO HANDLING ---
+        // HANDLE AUDIO
         if (result && result.status === 'success' && result.audio_data) {
           try {
             const rawData = result.audio_data
@@ -265,53 +236,45 @@ export function useAudioPlayer({
               rawData.byteOffset + rawData.byteLength
             ) as ArrayBuffer
 
-            const tempBuffer = await ctx.decodeAudioData(cleanBuffer)
-
-            // Step A: Trim Silence (Fixes robotic pauses)
-            const audioBuffer = trimSilence(ctx, tempBuffer)
+            const audioBuffer = await ctx.decodeAudioData(cleanBuffer)
 
             const source = ctx.createBufferSource()
             source.buffer = audioBuffer
             source.connect(ctx.destination)
 
-            const startTime = Math.max(ctx.currentTime, nextStartTimeRef.current)
-            source.start(startTime)
+            const start = Math.max(ctx.currentTime, nextStartTimeRef.current)
+            source.start(start)
+            nextStartTimeRef.current = start + audioBuffer.duration
 
-            // Step B: Schedule Next Chunk
-            nextStartTimeRef.current = startTime + audioBuffer.duration + CHUNK_SPACING
-
-            // Step C: Highlight Sync (Improved)
+            // ESTIMATED HIGHLIGHTING
             const durations = estimateSentenceDurations(batch.sentences, audioBuffer.duration)
 
             let accumulatedTime = 0
-            durations.forEach((duration, idx) => {
-              const sentenceGlobalIndex = batch.startSentenceIndex + idx
-              const triggerTime = startTime + accumulatedTime
-
-              // Add a tiny +50ms offset to ensure audio has actually started to avoid "rushing" sensation
-              const delayMs = (triggerTime - ctx.currentTime) * 1000 + 50
+            durations.forEach((dur, idx) => {
+              const globalIndex = batch.globalIndices[idx]
+              const triggerTime = start + accumulatedTime
+              const delayMs = (triggerTime - ctx.currentTime) * 1000
 
               if (delayMs >= 0) {
-                const timeoutId = setTimeout(() => {
+                const tid = setTimeout(() => {
                   if (!stopSignalRef.current) {
-                    setGlobalSentenceIndex(sentenceGlobalIndex)
-                    // Auto-turn page
-                    const pIndex = bookStructure.sentenceToPageMap[sentenceGlobalIndex]
-                    setVisualPageIndex((curr) => (curr !== pIndex ? pIndex : curr))
+                    setGlobalSentenceIndex(globalIndex)
+                    const page = bookStructure.sentenceToPageMap[globalIndex]
+                    setVisualPageIndex((c) => (c !== page ? page : c))
                   }
                 }, delayMs)
-                playbackTimeoutsRef.current.push(timeoutId)
+                playbackTimeoutsRef.current.push(tid)
               }
-              accumulatedTime += duration
+              accumulatedTime += dur
             })
 
-            // Loop Optimization
+            // Optimization: If buffer is healthy, relax the CPU
             const timeUntilNext = nextStartTimeRef.current - ctx.currentTime
             if (timeUntilNext > 4) {
               await new Promise((r) => setTimeout(r, (timeUntilNext - 2) * 1000))
             }
-          } catch (err) {
-            console.error('Decode error', err)
+          } catch (decodeErr) {
+            console.error('Decode Error', decodeErr)
           }
         }
       }
@@ -319,11 +282,14 @@ export function useAudioPlayer({
       if (!stopSignalRef.current) {
         setStatus('Completed')
         setIsPlaying(false)
+        setGlobalSentenceIndex(-1)
       }
     } catch (e: any) {
       console.error(e)
       setStatus('Error: ' + e.message)
       setIsPlaying(false)
+    } finally {
+      isPlayingRef.current = false
     }
   }
 
