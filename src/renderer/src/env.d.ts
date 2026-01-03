@@ -6,21 +6,23 @@ interface IScanResponse {
 }
 
 interface ICustomAPI {
-  generate: (text: string, speed?: number, sessionId: string) => Promise<IScanResponse>
-  loadAudio: (filepath: string) => Promise<Uint8Array>
-  play: (filepath: string) => Promise<string>
-  stop: () => Promise<boolean>
-  openFileDialog: () => Promise<string | null>
-  readFile: (filepath: string) => Promise<Uint8Array>
-  updateBookProgress: (bookId: string, progress: { lastPageIndex: number }) => Promise<boolean>
-  saveBook: (
-    path: string,
-    title: string,
-    cover: string | null
-  ) => Promise<{ success: boolean; book?: SavedBook }>
-  getLibrary: () => Promise<SavedBook[]>
-  deleteBook: (id: string) => Promise<boolean>
+  generate: (
+    text: string,
+    speed?: number,
+    sessionId?: string,
+    options?: { engine?: string; voicePath?: string | null }
+  ) => Promise<any>
+
   setSession: (sessionId: string) => Promise<boolean>
+  loadAudio: (filepath: string) => Promise<any>
+  play: (filepath: string) => Promise<void>
+  stop: () => Promise<void>
+  openFileDialog: () => Promise<string | null>
+  readFile: (filepath: string) => Promise<ArrayBuffer>
+  saveBook: (path: string, title: string, cover: string | null) => Promise<any>
+  getLibrary: () => Promise<any[]>
+  deleteBook: (id: string) => Promise<boolean>
+  updateBookProgress: (bookId: string, progress: any) => Promise<boolean>
 }
 
 interface IElectronAPI {

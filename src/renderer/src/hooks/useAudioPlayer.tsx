@@ -43,17 +43,17 @@ export function useAudioPlayer({
   setVisualPageIndex
 }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
-  const [isPaused, setIsPaused] = useState(false) // <--- NEW STATE
+  const [isPaused, setIsPaused] = useState(false)
   const [globalSentenceIndex, setGlobalSentenceIndex] = useState(-1)
   const [status, setStatus] = useState('Idle')
 
   const isPlayingRef = useRef(false)
-  const isPausedRef = useRef(false) // <--- NEW REF (for loops)
+  const isPausedRef = useRef(false)
   const stopSignalRef = useRef(false)
 
   const audioCtxRef = useRef<AudioContext | null>(null)
   const nextStartTimeRef = useRef(0)
-  const highlightScheduleRef = useRef<HighlightTrigger[]>([]) // <--- NEW: Central Schedule
+  const highlightScheduleRef = useRef<HighlightTrigger[]>([])
 
   // Session Tracking
   const currentSessionId = useRef<string>('')
@@ -73,11 +73,9 @@ export function useAudioPlayer({
     if (!isPlayingRef.current || isPausedRef.current) return
     console.log('Pausing...')
 
-    // 1. Update State
     isPausedRef.current = true
     setIsPaused(true)
 
-    // 2. Freeze Hardware
     if (audioCtxRef.current) {
       await audioCtxRef.current.suspend()
     }
@@ -101,7 +99,7 @@ export function useAudioPlayer({
     setGlobalSentenceIndex(-1)
 
     // 3. CLEANUP
-    highlightScheduleRef.current = [] // Clear highlighting queue
+    highlightScheduleRef.current = []
 
     if (audioCtxRef.current) {
       try {
@@ -133,7 +131,7 @@ export function useAudioPlayer({
 
     stopSignalRef.current = false
     isPlayingRef.current = true
-    isPausedRef.current = false // Ensure not paused
+    isPausedRef.current = false
     setIsPlaying(true)
     setIsPaused(false)
 
@@ -218,10 +216,24 @@ export function useAudioPlayer({
     const triggerGeneration = (index: number) => {
       if (index >= batches.length) return
       const batch = batches[index]
+
       if (batch.text === '[[[IMAGE]]]') {
         audioPromises[index] = Promise.resolve({ status: 'skipped', audio_data: null })
       } else {
-        audioPromises[index] = window.api.generate(batch.text, 1.2, newSessionId)
+        // --- NEW: RETRIEVE PREFERENCES (UPDATED LOGIC) ---
+        const engine = localStorage.getItem('tts_engine') || 'xtts'
+
+        // Pick the correct path variable based on the engine
+        const voicePath =
+          engine === 'piper'
+            ? localStorage.getItem('piper_model_path')
+            : localStorage.getItem('custom_voice_path')
+
+        // Pass everything to the backend
+        audioPromises[index] = window.api.generate(batch.text, 1.2, newSessionId, {
+          engine: engine,
+          voicePath: voicePath
+        })
       }
     }
 
@@ -234,10 +246,10 @@ export function useAudioPlayer({
 
       // --- MAIN LOOP ---
       for (let i = 0; i < batches.length; i++) {
-        // PAUSE CHECK: Freeze loop if paused
+        // PAUSE CHECK
         while (isPausedRef.current) {
           if (stopSignalRef.current) break
-          await new Promise((r) => setTimeout(r, 200)) // Wait 200ms and check again
+          await new Promise((r) => setTimeout(r, 200))
         }
 
         if (stopSignalRef.current) break
@@ -260,14 +272,12 @@ export function useAudioPlayer({
         if (result && result.status === 'skipped') {
           const idx = batch.globalIndices[0]
 
-          // Add to schedule immediately
           const startTime = Math.max(ctx.currentTime, nextStartTimeRef.current)
           highlightScheduleRef.current.push({ time: startTime, globalIndex: idx })
 
           const imagePause = 2.0
           nextStartTimeRef.current = startTime + imagePause
 
-          // Wait physical time so loop doesn't race ahead
           const waitMs = (nextStartTimeRef.current - ctx.currentTime) * 1000
           if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs))
           continue
@@ -291,7 +301,7 @@ export function useAudioPlayer({
             source.start(start)
             nextStartTimeRef.current = start + audioBuffer.duration
 
-            // SCHEDULING (Replaces setTimeout)
+            // SCHEDULING
             const durations = estimateSentenceDurations(batch.sentences, audioBuffer.duration)
             let accumulatedTime = 0
             durations.forEach((dur, idx) => {
@@ -303,13 +313,11 @@ export function useAudioPlayer({
               accumulatedTime += dur
             })
 
-            // Sort schedule just in case
             highlightScheduleRef.current.sort((a, b) => a.time - b.time)
 
             // Relax CPU
             const timeUntilNext = nextStartTimeRef.current - ctx.currentTime
             if (timeUntilNext > 4) {
-              // Wait, but respect pause
               let waitTime = (timeUntilNext - 2) * 1000
               while (waitTime > 0 && !stopSignalRef.current) {
                 if (isPausedRef.current) {
@@ -342,8 +350,7 @@ export function useAudioPlayer({
     }
   }
 
-  // --- HIGHLIGHT SYNC LOOP (Replaces setTimeout) ---
-  // Checks every 50ms what the current audio time is and updates highlight
+  // --- HIGHLIGHT SYNC LOOP ---
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isPlayingRef.current || isPausedRef.current || !audioCtxRef.current) return
@@ -353,11 +360,9 @@ export function useAudioPlayer({
 
       if (schedule.length === 0) return
 
-      // Find the latest trigger that has passed
       let lastPassedIndex = -1
       for (let i = 0; i < schedule.length; i++) {
         if (schedule[i].time <= t + 0.05) {
-          // 50ms tolerance
           lastPassedIndex = i
         } else {
           break
@@ -366,25 +371,20 @@ export function useAudioPlayer({
 
       if (lastPassedIndex !== -1) {
         const trigger = schedule[lastPassedIndex]
-
-        // Update Highlight
         setGlobalSentenceIndex((prev) => {
           if (prev !== trigger.globalIndex) {
-            // Sync Page
             const page = bookStructure.sentenceToPageMap[trigger.globalIndex]
             setVisualPageIndex((c) => (c !== page ? page : c))
             return trigger.globalIndex
           }
           return prev
         })
-
-        // Cleanup processed items
         highlightScheduleRef.current = schedule.slice(lastPassedIndex + 1)
       }
     }, 50)
 
     return () => clearInterval(interval)
-  }, [bookStructure]) // Re-create if book changes
+  }, [bookStructure])
 
   useEffect(() => {
     return () => {

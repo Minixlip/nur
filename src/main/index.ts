@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron' // <--- Added dialog
+import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -10,6 +10,22 @@ import { exec, ChildProcess } from 'child_process'
 import { setupLibraryHandlers } from './library'
 
 let currentPlayer: ChildProcess | null = null
+
+// --- CONSTANTS FOR MODEL MANAGEMENT ---
+const MODELS_DIR = path.join(app.getPath('userData'), 'models')
+const PIPER_FILENAME = 'en_US-lessac-medium.onnx'
+const PIPER_JSON = 'en_US-lessac-medium.onnx.json'
+
+// URLs (HuggingFace direct links)
+const PIPER_URL_ONNX =
+  'https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx?download=true'
+const PIPER_URL_JSON =
+  'https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json?download=true'
+
+// Ensure directory exists
+if (!fs.existsSync(MODELS_DIR)) {
+  fs.mkdirSync(MODELS_DIR, { recursive: true })
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -54,10 +70,82 @@ ipcMain.handle('dialog:openFile', async () => {
     return filePaths[0]
   }
 })
+
+// --- NEW: PIPER MODEL MANAGEMENT ---
+
+// 1. CHECK IF MODEL EXISTS
+ipcMain.handle('tts:checkPiper', () => {
+  const onnxPath = path.join(MODELS_DIR, PIPER_FILENAME)
+  const jsonPath = path.join(MODELS_DIR, PIPER_JSON)
+
+  const exists = fs.existsSync(onnxPath) && fs.existsSync(jsonPath)
+  return {
+    exists,
+    path: onnxPath // Return full path so frontend can pass to python
+  }
+})
+
+// 2. DOWNLOAD MODEL
+ipcMain.handle('tts:downloadPiper', async (event) => {
+  const downloadFile = (url: string, filename: string) => {
+    return new Promise<void>((resolve, reject) => {
+      const filePath = path.join(MODELS_DIR, filename)
+      const file = fs.createWriteStream(filePath)
+
+      const request = net.request(url)
+
+      request.on('response', (response) => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`Failed to download ${filename}: ${response.statusCode}`))
+          return
+        }
+
+        const totalBytes = parseInt(response.headers['content-length'] as string, 10)
+        let receivedBytes = 0
+
+        response.on('data', (chunk) => {
+          receivedBytes += chunk.length
+          file.write(chunk)
+
+          // Emit progress for ONNX file (it's the big one)
+          if (filename.endsWith('.onnx')) {
+            const progress = totalBytes ? (receivedBytes / totalBytes) * 100 : 0
+            // Send to renderer
+            event.sender.send('download-progress', progress)
+          }
+        })
+
+        response.on('end', () => {
+          file.end()
+          resolve()
+        })
+
+        response.on('error', (err) => {
+          fs.unlink(filePath, () => {}) // delete partial
+          reject(err)
+        })
+      })
+
+      request.end()
+    })
+  }
+
+  try {
+    console.log('[Main] Starting Piper Download...')
+    await downloadFile(PIPER_URL_JSON, PIPER_JSON) // Small config first
+    await downloadFile(PIPER_URL_ONNX, PIPER_FILENAME) // Big model second
+    console.log('[Main] Piper Download Complete.')
+    return true
+  } catch (error: any) {
+    console.error('[Main] Download failed:', error)
+    return false
+  }
+})
+
 // --------------------------------
 
 // 1. GENERATE AUDIO
-// --- 1. SET SESSION (NEW) ---
+// --- 1. SET SESSION ---
 ipcMain.handle('tts:setSession', async (_event, sessionId) => {
   return new Promise((resolve) => {
     const request = net.request({
@@ -79,9 +167,21 @@ ipcMain.handle('tts:setSession', async (_event, sessionId) => {
 })
 
 // --- 2. GENERATE AUDIO (UPDATED) ---
-// Now accepts 'sessionId'
-ipcMain.handle('tts:generate', async (_event, { text, speed, sessionId }) => {
+// Now accepts 'sessionId', 'engine', and 'voicePath'
+ipcMain.handle('tts:generate', async (_event, { text, speed, sessionId, engine, voicePath }) => {
   const safeSpeed = speed || 1.0
+  const safeEngine = engine || 'xtts'
+
+  // LOGIC FIX:
+  // If XTTS -> Default to 'default_speaker.wav' if missing
+  // If Piper -> Default to empty string if missing (so backend throws specific error)
+  let safeVoice = voicePath
+  if (!safeVoice && safeEngine === 'xtts') {
+    safeVoice = 'default_speaker.wav'
+  }
+  if (!safeVoice && safeEngine === 'piper') {
+    safeVoice = ''
+  }
 
   return new Promise((resolve, reject) => {
     const request = net.request({
@@ -114,14 +214,17 @@ ipcMain.handle('tts:generate', async (_event, { text, speed, sessionId }) => {
 
     request.on('error', (err) => reject(err.message))
 
-    // Pass session_id to Python
+    // Pass parameters to Python
+    // If engine is Piper, 'voicePath' contains the path to the ONNX file
     request.write(
       JSON.stringify({
         text: text,
-        speaker_wav: 'default_speaker.wav',
+        session_id: sessionId,
+        engine: safeEngine,
+        speaker_wav: safeVoice, // XTTS uses this
+        piper_model_path: safeVoice, // PIPER uses this (reusing variable)
         language: 'en',
-        speed: safeSpeed,
-        session_id: sessionId // <--- PASSED HERE
+        speed: safeSpeed
       })
     )
 
@@ -129,7 +232,7 @@ ipcMain.handle('tts:generate', async (_event, { text, speed, sessionId }) => {
   })
 })
 
-// 2. PLAY FILE (Native Fallback - mostly unused now due to Web Audio)
+// 2. PLAY FILE (Native Fallback)
 ipcMain.handle('audio:play', async (_event, { filepath }) => {
   return new Promise((resolve, reject) => {
     if (currentPlayer) {
@@ -182,9 +285,9 @@ ipcMain.handle('audio:load', async (_event, { filepath }) => {
   }
 })
 
-// 5. READ FILE (To load EPUB data into memory)
+// 5. READ FILE
 ipcMain.handle('fs:readFile', async (_event, { filepath }) => {
-  return fs.readFileSync(filepath) // Returns buffer
+  return fs.readFileSync(filepath)
 })
 
 app.whenReady().then(() => {
@@ -193,7 +296,6 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // INITIALIZE YOUR LIBRARY LOGIC HERE
   setupLibraryHandlers()
 
   createWindow()

@@ -5,16 +5,15 @@ import { useLibrary } from '../../../hooks/useLibrary'
 import { BookViewer } from '../../bookViewer'
 import { TableOfContents } from '../../TableOfContents'
 import { SavedBook } from '@renderer/env'
-
-// Updated Interface
+import Settings from '../settings/Settings' // <--- IMPORT SETTINGS
 
 export default function Library(): React.JSX.Element {
   // --- 1. STATE MANAGEMENT ---
   const { library, addToLibrary, removeBook, updateProgress } = useLibrary()
-  // Track the currently active book ID so we know what to update
   const [activeBookId, setActiveBookId] = useState<string | null>(null)
 
-  const [viewMode, setViewMode] = useState<'shelf' | 'reader'>('shelf')
+  // UPDATED: Added 'settings' to view modes
+  const [viewMode, setViewMode] = useState<'shelf' | 'reader' | 'settings'>('shelf')
 
   const [visualPageIndex, setVisualPageIndex] = useState(0)
   const [isTocOpen, setIsTocOpen] = useState(false)
@@ -23,7 +22,6 @@ export default function Library(): React.JSX.Element {
   const { totalPages, bookTitle, isLoading, error, importBook, loadBookByPath, bookStructure } =
     useBookImporter()
 
-  // UPDATE THIS LINE to include isPaused and pause
   const { isPlaying, isPaused, globalSentenceIndex, status, play, pause, stop } = useAudioPlayer({
     bookStructure,
     visualPageIndex,
@@ -48,34 +46,24 @@ export default function Library(): React.JSX.Element {
     })
   }
 
-  // Also handle chapter clicks from Table of Contents
   const handleChapterClick = (pageIndex: number) => {
     setVisualPageIndex(pageIndex)
     if (activeBookId) updateProgress(activeBookId, pageIndex)
   }
 
-  // Import New Book (Clicking "+ Add Book")
   const handleImportNew = async () => {
-    // 1. Open Dialog & Parse
     const bookData = await importBook(true)
     if (bookData) {
-      // 2. Save to DB (PASSING THE COVER NOW)
       await addToLibrary(bookData.filePath, bookData.title, bookData.cover || null)
-
-      // 3. Reset Reader & Switch View
       setVisualPageIndex(0)
       setIsTocOpen(false)
       setViewMode('reader')
     }
   }
 
-  // UPDATED: Open Book restores progress
   const openBook = async (book: SavedBook) => {
-    setActiveBookId(book.id) // Track ID
-
-    // Restore location (default to 0 if new)
+    setActiveBookId(book.id)
     setVisualPageIndex(book.lastPageIndex || 0)
-
     setIsTocOpen(false)
     setViewMode('reader')
     await loadBookByPath(book.path)
@@ -83,23 +71,52 @@ export default function Library(): React.JSX.Element {
 
   const goBackToShelf = () => {
     stop()
-    setActiveBookId(null) // Clear ID
+    setActiveBookId(null)
     setViewMode('shelf')
   }
 
-  // --- 4. RENDER: SHELF MODE ---
+  // --- 4. RENDER: SETTINGS MODE (NEW) ---
+  if (viewMode === 'settings') {
+    return (
+      <div className="min-h-screen bg-gray-900 relative">
+        <div className="p-6 border-b border-gray-800 flex items-center gap-4">
+          <button
+            onClick={() => setViewMode('shelf')}
+            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg font-semibold transition-colors flex items-center gap-2"
+          >
+            <span>←</span> Back to Library
+          </button>
+        </div>
+        <Settings />
+      </div>
+    )
+  }
+
+  // --- 5. RENDER: SHELF MODE ---
   if (viewMode === 'shelf') {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
         {/* HEADER */}
         <div className="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
           <h1 className="text-3xl font-bold text-white">My Library</h1>
-          <button
-            onClick={handleImportNew}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-bold shadow-lg text-white flex items-center gap-2"
-          >
-            <span>+</span> Add Book
-          </button>
+
+          <div className="flex gap-4">
+            {/* SETTINGS BUTTON (NEW) */}
+            <button
+              onClick={() => setViewMode('settings')}
+              className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition shadow-lg border border-gray-700"
+              title="Settings"
+            >
+              ⚙️
+            </button>
+
+            <button
+              onClick={handleImportNew}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-bold shadow-lg text-white flex items-center gap-2"
+            >
+              <span>+</span> Add Book
+            </button>
+          </div>
         </div>
 
         {/* BOOK GRID */}
@@ -110,7 +127,6 @@ export default function Library(): React.JSX.Element {
               onClick={() => openBook(book)}
               className="group relative bg-gray-800 rounded-xl p-4 cursor-pointer hover:bg-gray-750 hover:-translate-y-1 transition-all duration-300 shadow-xl border border-gray-700"
             >
-              {/* COVER IMAGE OR PLACEHOLDER */}
               <div className="aspect-2/3 bg-indigo-900/50 rounded-lg mb-4 flex items-center justify-center group-hover:bg-indigo-800/50 transition shadow-inner overflow-hidden relative">
                 {book.cover ? (
                   <img src={book.cover} alt={book.title} className="w-full h-full object-cover" />
@@ -126,7 +142,6 @@ export default function Library(): React.JSX.Element {
                 {new Date(book.dateAdded).toLocaleDateString()}
               </p>
 
-              {/* Delete Button (Visible on Hover) */}
               <button
                 onClick={(e) => removeBook(book.id, e)}
                 className="absolute top-2 right-2 bg-red-600/80 hover:bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
@@ -148,7 +163,7 @@ export default function Library(): React.JSX.Element {
     )
   }
 
-  // --- 5. RENDER: READER MODE ---
+  // --- 6. RENDER: READER MODE ---
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
       {/* READER HEADER */}
@@ -171,7 +186,6 @@ export default function Library(): React.JSX.Element {
 
       {/* READER CONTAINER */}
       <div className="relative max-w-4xl mx-auto bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 min-h-150 flex flex-col">
-        {/* TABLE OF CONTENTS OVERLAY */}
         <TableOfContents
           items={bookStructure.processedToc || []}
           isOpen={isTocOpen}
@@ -182,7 +196,6 @@ export default function Library(): React.JSX.Element {
 
         {/* TOOLBAR */}
         <div className="bg-gray-750 p-4 border-b border-gray-700 flex justify-between items-center backdrop-blur-sm z-10">
-          {/* Navigation Controls */}
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrevPage}
@@ -192,7 +205,6 @@ export default function Library(): React.JSX.Element {
               ←
             </button>
 
-            {/* Title / Page Count (Clickable) */}
             <button
               onClick={() => setIsTocOpen(true)}
               disabled={totalPages === 0}
@@ -216,7 +228,6 @@ export default function Library(): React.JSX.Element {
             </button>
           </div>
 
-          {/* Action Controls */}
           <div className="flex gap-2">
             <button
               onClick={() => setIsTocOpen(!isTocOpen)}
@@ -235,7 +246,6 @@ export default function Library(): React.JSX.Element {
               </button>
             ) : (
               <>
-                {/* NEW: PAUSE / RESUME BUTTONS */}
                 {isPaused ? (
                   <button
                     onClick={play}
