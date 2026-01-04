@@ -71,6 +71,18 @@ ipcMain.handle('dialog:openFile', async () => {
   }
 })
 
+ipcMain.handle('dialog:openAudioFile', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'Audio Files', extensions: ['wav', 'mp3'] }]
+  })
+  if (canceled) {
+    return null
+  } else {
+    return filePaths[0]
+  }
+})
+
 // --- NEW: PIPER MODEL MANAGEMENT ---
 
 // 1. CHECK IF MODEL EXISTS

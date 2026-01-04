@@ -8,10 +8,16 @@ export default function Settings(): React.JSX.Element {
   const [piperPath, setPiperPath] = useState<string>('')
   const [progress, setProgress] = useState(0)
 
+  // NEW: Custom Voice State
+  const [customVoicePath, setCustomVoicePath] = useState<string>('')
+
   useEffect(() => {
-    // 1. Load saved engine preference
-    const saved = localStorage.getItem('tts_engine') || 'xtts'
-    setEngine(saved)
+    // 1. Load saved preferences
+    const savedEngine = localStorage.getItem('tts_engine') || 'xtts'
+    const savedVoice = localStorage.getItem('custom_voice_path') || ''
+
+    setEngine(savedEngine)
+    setCustomVoicePath(savedVoice)
 
     // 2. Check if Piper is installed
     checkPiperModel()
@@ -70,6 +76,22 @@ export default function Settings(): React.JSX.Element {
     localStorage.setItem('tts_engine', newEngine)
   }
 
+  // --- NEW: Voice Cloning Handlers ---
+
+  const handleVoiceSelect = async () => {
+    // @ts-ignore
+    const path = await window.api.openAudioFileDialog()
+    if (path) {
+      setCustomVoicePath(path)
+      localStorage.setItem('custom_voice_path', path)
+    }
+  }
+
+  const handleResetVoice = () => {
+    setCustomVoicePath('')
+    localStorage.removeItem('custom_voice_path')
+  }
+
   return (
     <div className="p-8 text-white h-full overflow-y-auto">
       <h1 className="text-3xl font-bold mb-8">Settings</h1>
@@ -83,34 +105,80 @@ export default function Settings(): React.JSX.Element {
 
           <div className="space-y-4">
             {/* OPTION A: XTTS (Always Available) */}
-            <button
-              onClick={() => handleEngineChange('xtts')}
-              className={`w-full px-5 py-4 rounded-xl border text-left flex justify-between items-center transition-all duration-200 ${
+            <div
+              className={`rounded-xl border transition-all duration-200 overflow-hidden ${
                 engine === 'xtts'
-                  ? 'bg-indigo-600 border-indigo-500 shadow-lg scale-[1.01]'
-                  : 'bg-gray-700/30 border-gray-600 hover:bg-gray-700/50'
+                  ? 'bg-indigo-900/40 border-indigo-500 shadow-lg'
+                  : 'bg-gray-700/30 border-gray-600'
               }`}
             >
-              <div>
-                <div className="font-bold text-lg flex items-center gap-2">
-                  Coqui XTTS
-                  <span className="text-xs bg-indigo-800 text-indigo-200 px-2 py-0.5 rounded border border-indigo-600">
-                    HQ
-                  </span>
+              <button
+                onClick={() => handleEngineChange('xtts')}
+                className="w-full px-5 py-4 text-left flex justify-between items-center"
+              >
+                <div>
+                  <div className="font-bold text-lg flex items-center gap-2">
+                    Coqui XTTS
+                    <span className="text-xs bg-indigo-800 text-indigo-200 px-2 py-0.5 rounded border border-indigo-600">
+                      HQ
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-300 mt-1">
+                    Realistic, emotive voices. Supports cloning.
+                    <span className="ml-2 text-yellow-500 text-xs font-mono">Requires GPU</span>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-300 mt-1">
-                  Realistic, emotive voices. Supports cloning.
-                  <span className="ml-2 text-yellow-500 text-xs font-mono">Requires GPU</span>
+                {engine === 'xtts' ? (
+                  <div className="h-6 w-6 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold">
+                    ✓
+                  </div>
+                ) : (
+                  <div className="h-6 w-6 rounded-full border-2 border-gray-500"></div>
+                )}
+              </button>
+
+              {/* VOICE CLONING SUB-SECTION (Only visible when XTTS is active) */}
+              {engine === 'xtts' && (
+                <div className="px-5 pb-5 pt-2 border-t border-indigo-500/30 bg-black/20">
+                  <div className="mt-3 text-sm font-semibold text-indigo-300 mb-2">
+                    Voice Cloning (Reference Audio)
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {customVoicePath ? (
+                      <div className="flex-1 bg-gray-900/50 border border-indigo-500/50 rounded-lg p-3 flex justify-between items-center">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <div className="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs">
+                            🎤
+                          </div>
+                          <div className="truncate text-sm text-gray-200" title={customVoicePath}>
+                            ...{customVoicePath.slice(-40)}
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleResetVoice}
+                          className="text-xs text-red-400 hover:text-red-300 px-2 font-semibold"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex-1 text-xs text-gray-400 italic bg-gray-900/30 p-3 rounded-lg border border-dashed border-gray-600">
+                        Using Default Female Voice. Upload a short WAV file (6-10s) to clone a
+                        voice.
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleVoiceSelect}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-bold shadow transition hover:-translate-y-0.5"
+                    >
+                      {customVoicePath ? 'Change Voice' : 'Select File'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-              {engine === 'xtts' ? (
-                <div className="h-6 w-6 rounded-full bg-white text-indigo-600 flex items-center justify-center font-bold">
-                  ✓
-                </div>
-              ) : (
-                <div className="h-6 w-6 rounded-full border-2 border-gray-500"></div>
               )}
-            </button>
+            </div>
 
             {/* OPTION B: PIPER (Conditional State) */}
             <div

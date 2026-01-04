@@ -34,7 +34,8 @@ const api = {
   getLibrary: () => ipcRenderer.invoke('get-library'),
   deleteBook: (id: string) => ipcRenderer.invoke('delete-book', id),
   updateBookProgress: (bookId: string, progress: any) =>
-    ipcRenderer.invoke('update-book-progress', bookId, progress)
+    ipcRenderer.invoke('update-book-progress', bookId, progress),
+  openAudioFileDialog: () => ipcRenderer.invoke('dialog:openAudioFile')
 }
 
 if (process.contextIsolated) {
