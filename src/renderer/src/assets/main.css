@@ -1,5 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&display=swap');
 @import 'tailwindcss';
 
 button {
   cursor: pointer;
+}
+
+/* Optional: Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar for that sleek look */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }

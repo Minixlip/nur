@@ -1,6 +1,6 @@
 import React from 'react'
 import { VisualBlock, TocItem } from '../types/book'
-import { ReaderSettings } from '../hooks/useReaderSettings' // <--- IMPORT TYPE
+import { ReaderSettings } from '../hooks/useReaderSettings'
 
 interface BookViewerProps {
   bookStructure: {
@@ -13,7 +13,7 @@ interface BookViewerProps {
   globalSentenceIndex: number
   isPlaying: boolean
   onChapterClick: (pageIndex: number) => void
-  settings: ReaderSettings // <--- NEW PROP
+  settings: ReaderSettings
 }
 
 export const BookViewer: React.FC<BookViewerProps> = ({
@@ -22,15 +22,15 @@ export const BookViewer: React.FC<BookViewerProps> = ({
   globalSentenceIndex,
   isPlaying,
   onChapterClick,
-  settings // Destructure settings
+  settings
 }) => {
   const pageBlocks = bookStructure.pagesStructure[visualPageIndex]
 
-  // Helper: Font Family Class
+  // Font Family: Merriweather is great for books
   const getFontFamily = () => {
     switch (settings.fontFamily) {
       case 'serif':
-        return 'font-serif'
+        return 'font-serif' // Ensure your Tailwind config has a good serif stack
       case 'mono':
         return 'font-mono'
       default:
@@ -38,37 +38,35 @@ export const BookViewer: React.FC<BookViewerProps> = ({
     }
   }
 
-  // Helper: Theme Colors (Text & Highlights)
-  // Note: Background is handled by the parent container in Library.tsx
   const getThemeTextClass = () => {
     switch (settings.theme) {
       case 'light':
-        return 'text-gray-900'
+        return 'text-zinc-800'
       case 'sepia':
-        return 'text-[#5b4636]'
+        return 'text-[#433422]'
       default:
-        return 'text-gray-300' // Dark mode text
+        return 'text-zinc-300' // Softer than pure white
     }
   }
 
   const getHighlightClass = () => {
     switch (settings.theme) {
       case 'light':
-        return 'bg-yellow-200 text-black shadow-sm'
+        return 'bg-yellow-200/50 text-black decoration-clone'
       case 'sepia':
-        return 'bg-[#e3d0a6] text-black shadow-sm'
+        return 'bg-[#e3d0a6] text-black decoration-clone'
       default:
-        return 'bg-indigo-600 text-white shadow-sm' // Dark mode highlight
+        return 'bg-white/10 text-white shadow-[0_0_15px_rgba(255,255,255,0.1)] rounded decoration-clone' // Subtle glow
     }
   }
 
   if (!pageBlocks || pageBlocks.length === 0) {
-    return <div className="text-gray-500 italic p-4 text-center mt-10">Empty Page</div>
+    return <div className="text-zinc-500 italic p-4 text-center mt-10">Empty Page</div>
   }
 
   return (
     <div
-      className={`max-w-3xl mx-auto min-h-[60vh] flex flex-col justify-start pb-20 transition-all duration-300`}
+      className={`max-w-2xl mx-auto min-h-[60vh] flex flex-col justify-start transition-all duration-300 ease-in-out`}
     >
       {pageBlocks.map((block, blockIdx) => {
         // 1. IMAGE BLOCK
@@ -80,41 +78,36 @@ export const BookViewer: React.FC<BookViewerProps> = ({
           return (
             <div
               key={blockIdx}
-              className={`my-6 flex justify-center p-2 rounded-lg transition-all duration-500 ${
-                isHighlight ? 'ring-2 ring-indigo-500 opacity-100 scale-105' : 'opacity-90'
-              }`}
+              className={`my-8 flex justify-center transition-all duration-700 ${isHighlight ? 'scale-105 contrast-125' : 'opacity-90'}`}
             >
               <img
                 src={src}
                 alt="Illustration"
-                className="max-w-full max-h-125 rounded shadow-lg object-contain bg-black/20"
+                className="max-w-full rounded-lg shadow-2xl object-contain"
               />
             </div>
           )
         }
 
-        // 2. TEXT BLOCK (PARAGRAPH)
         const blockText = block.content.join(' ').trim()
-
-        // CHECK: Is this paragraph actually a Chapter Title from the Table of Contents?
         const tocMatch = bookStructure.processedToc?.find(
           (item) => item.label.trim().toLowerCase() === blockText.toLowerCase()
         )
 
-        // 3. RENDER AS LINK (If match found)
+        // 2. CHAPTER TITLE (Link)
         if (tocMatch) {
           return (
             <button
               key={blockIdx}
               onClick={() => onChapterClick(tocMatch.pageIndex)}
-              className="w-full text-left mb-6 group mt-4"
+              className="w-full text-left mt-8 mb-6 group"
             >
               <span
-                className={`text-2xl font-bold hover:underline decoration-indigo-500/50 underline-offset-4 transition-all block py-2 ${
+                className={`text-3xl md:text-4xl font-bold tracking-tight transition-colors ${
                   settings.theme === 'dark'
-                    ? 'text-indigo-400 hover:text-indigo-300'
-                    : 'text-indigo-600 hover:text-indigo-700'
-                }`}
+                    ? 'text-zinc-100 group-hover:text-white'
+                    : 'text-zinc-900 group-hover:text-black'
+                } ${getFontFamily()}`}
               >
                 {blockText}
               </span>
@@ -122,11 +115,11 @@ export const BookViewer: React.FC<BookViewerProps> = ({
           )
         }
 
-        // 4. RENDER AS STANDARD TEXT
+        // 3. PARAGRAPH
         return (
           <p
             key={blockIdx}
-            className={`mb-4 text-justify transition-all duration-300 ${getFontFamily()} ${getThemeTextClass()}`}
+            className={`mb-6 text-lg md:text-xl leading-relaxed transition-all duration-300 ${getFontFamily()} ${getThemeTextClass()}`}
             style={{
               fontSize: `${settings.fontSize}%`,
               lineHeight: settings.lineHeight
@@ -139,7 +132,7 @@ export const BookViewer: React.FC<BookViewerProps> = ({
               return (
                 <span
                   key={localIdx}
-                  className={`transition-colors duration-200 box-decoration-clone rounded px-0.5 ${
+                  className={`transition-colors duration-300 px-0.5 rounded-sm ${
                     isCurrent ? getHighlightClass() : ''
                   }`}
                 >

@@ -2,30 +2,22 @@ import React, { useState } from 'react'
 import { useBookImporter } from '../../../hooks/useBookImporter'
 import { useAudioPlayer } from '../../../hooks/useAudioPlayer'
 import { useLibrary } from '../../../hooks/useLibrary'
-import { useReaderSettings } from '../../../hooks/useReaderSettings' // <--- NEW HOOK
+import { useReaderSettings } from '../../../hooks/useReaderSettings'
 import { BookViewer } from '../../bookViewer'
 import { TableOfContents } from '../../TableOfContents'
-import AppearanceMenu from '../../AppearanceMenu' // <--- NEW COMPONENT
+import AppearanceMenu from '../../AppearanceMenu'
 import { SavedBook } from '@renderer/env'
 import Settings from '../settings/Settings'
 
 export default function Library(): React.JSX.Element {
-  // --- 1. STATE MANAGEMENT ---
   const { library, addToLibrary, removeBook, updateProgress } = useLibrary()
   const [activeBookId, setActiveBookId] = useState<string | null>(null)
-
-  // View Modes
   const [viewMode, setViewMode] = useState<'shelf' | 'reader' | 'settings'>('shelf')
-
-  // Reader State
   const [visualPageIndex, setVisualPageIndex] = useState(0)
   const [isTocOpen, setIsTocOpen] = useState(false)
-
-  // NEW: Appearance Menu State
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false)
   const { settings, updateSetting } = useReaderSettings()
 
-  // --- 2. HOOKS ---
   const { totalPages, bookTitle, isLoading, error, importBook, loadBookByPath, bookStructure } =
     useBookImporter()
 
@@ -35,9 +27,7 @@ export default function Library(): React.JSX.Element {
     setVisualPageIndex
   })
 
-  // --- 3. HANDLERS ---
-
-  // Navigation
+  // --- HANDLERS ---
   const handleNextPage = () => {
     setVisualPageIndex((p) => {
       const newPage = Math.min(totalPages - 1, p + 1)
@@ -52,12 +42,10 @@ export default function Library(): React.JSX.Element {
       return newPage
     })
   }
-
   const handleChapterClick = (pageIndex: number) => {
     setVisualPageIndex(pageIndex)
     if (activeBookId) updateProgress(activeBookId, pageIndex)
   }
-
   const handleImportNew = async () => {
     const bookData = await importBook(true)
     if (bookData) {
@@ -67,7 +55,6 @@ export default function Library(): React.JSX.Element {
       setViewMode('reader')
     }
   }
-
   const openBook = async (book: SavedBook) => {
     setActiveBookId(book.id)
     setVisualPageIndex(book.lastPageIndex || 0)
@@ -75,260 +62,305 @@ export default function Library(): React.JSX.Element {
     setViewMode('reader')
     await loadBookByPath(book.path)
   }
-
   const goBackToShelf = () => {
     stop()
     setActiveBookId(null)
     setViewMode('shelf')
   }
 
-  // --- 4. RENDER: SETTINGS MODE ---
-  if (viewMode === 'settings') {
-    return (
-      <div className="min-h-screen bg-gray-900 relative">
-        <div className="p-6 border-b border-gray-800 flex items-center gap-4">
-          <button
-            onClick={() => setViewMode('shelf')}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg font-semibold transition-colors flex items-center gap-2"
-          >
-            <span>←</span> Back to Library
-          </button>
-        </div>
-        <Settings />
+  // --- UI COMPONENTS ---
+
+  // 1. SIDEBAR (The Glassy Left Panel)
+  const Sidebar = () => (
+    <aside className="w-64 flex-shrink-0 bg-black/20 backdrop-blur-xl border-r border-white/5 flex flex-col p-4 gap-6 z-20">
+      {/* Window Controls Placeholder (Mac style) */}
+      <div className="flex gap-2 px-2">
+        <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+        <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+        <div className="w-3 h-3 rounded-full bg-emerald-500/80"></div>
       </div>
-    )
-  }
 
-  // --- 5. RENDER: SHELF MODE ---
-  if (viewMode === 'shelf') {
-    return (
-      <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
-        {/* HEADER */}
-        <div className="flex justify-between items-center mb-8 border-b border-gray-700 pb-4">
-          <h1 className="text-3xl font-bold text-white">My Library</h1>
+      <nav className="flex flex-col gap-2 mt-4">
+        <button
+          onClick={goBackToShelf}
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium ${
+            viewMode === 'shelf'
+              ? 'bg-white/10 text-white shadow-inner'
+              : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/5'
+          }`}
+        >
+          <span className="text-lg">📚</span> My Library
+        </button>
+        <button
+          onClick={() => setViewMode('settings')}
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium ${
+            viewMode === 'settings'
+              ? 'bg-white/10 text-white shadow-inner'
+              : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/5'
+          }`}
+        >
+          <span className="text-lg">⚙️</span> Settings
+        </button>
+      </nav>
 
-          <div className="flex gap-4">
-            <button
-              onClick={() => setViewMode('settings')}
-              className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition shadow-lg border border-gray-700"
-              title="Settings"
-            >
-              ⚙️
-            </button>
-
-            <button
-              onClick={handleImportNew}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-bold shadow-lg text-white flex items-center gap-2"
-            >
-              <span>+</span> Add Book
-            </button>
-          </div>
-        </div>
-
-        {/* BOOK GRID */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-          {library.map((book) => (
+      {/* RECENT READS MINI SECTION */}
+      <div className="mt-auto">
+        <h4 className="px-2 text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">
+          Recent Reads
+        </h4>
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+          {library.slice(0, 3).map((book) => (
             <div
               key={book.id}
               onClick={() => openBook(book)}
-              className="group relative bg-gray-800 rounded-xl p-4 cursor-pointer hover:bg-gray-750 hover:-translate-y-1 transition-all duration-300 shadow-xl border border-gray-700"
+              className="w-12 h-16 bg-zinc-800 rounded-md overflow-hidden cursor-pointer hover:opacity-80 transition flex-shrink-0 border border-white/10"
             >
-              <div className="aspect-2/3 bg-indigo-900/50 rounded-lg mb-4 flex items-center justify-center group-hover:bg-indigo-800/50 transition shadow-inner overflow-hidden relative">
-                {book.cover ? (
-                  <img src={book.cover} alt={book.title} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-4xl">📖</span>
-                )}
-              </div>
-
-              <h3 className="font-bold text-gray-200 line-clamp-2 min-h-12 leading-tight">
-                {book.title}
-              </h3>
-              <p className="text-xs text-gray-500 mt-2">
-                {new Date(book.dateAdded).toLocaleDateString()}
-              </p>
-
-              <button
-                onClick={(e) => removeBook(book.id, e)}
-                className="absolute top-2 right-2 bg-red-600/80 hover:bg-red-500 text-white w-6 h-6 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
-                title="Delete Book"
-              >
-                ✕
-              </button>
+              {book.cover ? (
+                <img src={book.cover} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-xs">📖</div>
+              )}
             </div>
           ))}
+        </div>
+      </div>
+    </aside>
+  )
 
-          {library.length === 0 && (
-            <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl">
-              <p className="text-xl font-semibold mb-2">Your library is empty</p>
-              <p className="text-sm">Click "Add Book" to import your first EPUB</p>
+  // 2. FLOATING PLAYER (The Pill at the bottom)
+  const FloatingPlayer = () => {
+    if (viewMode !== 'reader') return null
+    return (
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
+        <div className="bg-zinc-900/90 backdrop-blur-2xl border border-white/10 pl-4 pr-6 py-3 rounded-full shadow-2xl flex items-center gap-6 transition-all hover:scale-105 hover:bg-zinc-900">
+          {/* Play/Pause Circle */}
+          <button
+            onClick={isPlaying ? (isPaused ? play : pause) : play}
+            className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:bg-zinc-200 transition active:scale-95"
+          >
+            {isPlaying && !isPaused ? (
+              <span className="text-xl font-bold">⏸</span>
+            ) : (
+              <span className="text-xl font-bold ml-1">▶</span>
+            )}
+          </button>
+
+          {/* Fake Waveform / Progress */}
+          <div className="flex flex-col gap-1 w-48">
+            {/* We use a simple visualizer placeholder or progress bar */}
+            <div className="h-8 flex items-center gap-1 opacity-50">
+              {[...Array(12)].map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-1 bg-white rounded-full transition-all duration-300 ${isPlaying && !isPaused ? 'animate-pulse' : ''}`}
+                  style={{ height: `${Math.random() * 20 + 8}px` }}
+                ></div>
+              ))}
             </div>
-          )}
+          </div>
+
+          {/* Info & Controls */}
+          <div className="flex items-center gap-4 border-l border-white/10 pl-4">
+            <div className="text-xs">
+              <div className="text-zinc-400">Status</div>
+              <div className="text-emerald-400 font-mono">{status}</div>
+            </div>
+
+            <button onClick={stop} className="text-zinc-400 hover:text-red-400 transition">
+              ⏹
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
-  // --- 6. RENDER: READER MODE ---
+  // --- MAIN RENDER ---
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
-      {/* READER HEADER */}
-      <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-4">
-        <div>
-          <button
-            onClick={goBackToShelf}
-            className="text-gray-400 hover:text-white flex items-center gap-2 text-sm font-semibold transition-colors"
-          >
-            <span>←</span> Back to Shelf
-          </button>
-        </div>
-        <div className="text-right">
-          <p className="text-gray-400 text-sm">
-            Status: <span className="text-indigo-400">{status}</span>
-          </p>
-          {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
-        </div>
-      </div>
+    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans selection:bg-indigo-500/30">
+      {/* LEFT SIDEBAR (Always visible or contextual) */}
+      <Sidebar />
 
-      {/* READER CONTAINER */}
-      <div className="relative max-w-4xl mx-auto bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 min-h-150 flex flex-col">
-        {/* OVERLAYS */}
-        <TableOfContents
-          items={bookStructure.processedToc || []}
-          isOpen={isTocOpen}
-          onClose={() => setIsTocOpen(false)}
-          currentVisualPage={visualPageIndex}
-          onChapterClick={handleChapterClick}
-        />
-
-        {/* TOOLBAR */}
-        <div className="bg-gray-750 p-4 border-b border-gray-700 flex justify-between items-center backdrop-blur-sm z-10">
-          {/* Navigation Controls */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handlePrevPage}
-              disabled={visualPageIndex === 0}
-              className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50 text-gray-300"
-            >
-              ←
-            </button>
-
-            <button
-              onClick={() => setIsTocOpen(true)}
-              disabled={totalPages === 0}
-              className="text-center px-4 py-1 hover:bg-gray-700/50 rounded cursor-pointer transition"
-              title="View Chapters"
-            >
-              <div className="font-semibold text-white italic truncate max-w-50 md:max-w-75">
-                {bookTitle}
-              </div>
-              <div className="text-xs font-mono text-gray-400">
-                Page {visualPageIndex + 1} / {Math.max(1, totalPages)}
-              </div>
-            </button>
-
-            <button
-              onClick={handleNextPage}
-              disabled={visualPageIndex >= totalPages - 1}
-              className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50 text-gray-300"
-            >
-              →
-            </button>
+      {/* RIGHT CONTENT AREA */}
+      <main className="flex-1 relative flex flex-col h-full overflow-hidden bg-gradient-to-br from-zinc-900 to-zinc-950">
+        {/* VIEW: SETTINGS */}
+        {viewMode === 'settings' && (
+          <div className="h-full overflow-y-auto">
+            <Settings />
           </div>
+        )}
 
-          {/* Action Controls */}
-          <div className="flex gap-2 relative">
-            {/* NEW: APPEARANCE BUTTON */}
-            <button
-              onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
-              className={`px-3 py-2 rounded-lg font-bold transition-colors ${
-                isAppearanceOpen
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-              title="Appearance Settings"
-            >
-              Aa
-            </button>
-
-            {/* APPEARANCE MENU POPUP */}
-            <AppearanceMenu
-              isOpen={isAppearanceOpen}
-              onClose={() => setIsAppearanceOpen(false)}
-              settings={settings}
-              updateSetting={updateSetting}
-            />
-
-            <button
-              onClick={() => setIsTocOpen(!isTocOpen)}
-              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300"
-              title="Table of Contents"
-            >
-              ☰
-            </button>
-
-            {!isPlaying ? (
+        {/* VIEW: SHELF */}
+        {viewMode === 'shelf' && (
+          <div className="p-8 h-full overflow-y-auto">
+            <div className="flex justify-between items-end mb-10">
+              <div>
+                <h1 className="text-4xl font-bold text-white tracking-tight mb-2">My Library</h1>
+                <p className="text-zinc-400">Continue your reading journey.</p>
+              </div>
               <button
-                onClick={play}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold shadow-lg transition-all text-white"
+                onClick={handleImportNew}
+                className="px-5 py-2.5 bg-white text-black hover:bg-zinc-200 rounded-full font-bold shadow-lg transition-transform active:scale-95 flex items-center gap-2"
               >
-                <span>▶</span> Read
+                <span>+</span> Add Book
               </button>
-            ) : (
-              <>
-                {isPaused ? (
-                  <button
-                    onClick={play}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-bold shadow-lg transition-all text-white"
-                  >
-                    <span>▶</span> Resume
-                  </button>
-                ) : (
-                  <button
-                    onClick={pause}
-                    className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg font-bold shadow-lg transition-all text-white"
-                  >
-                    <span>⏸</span> Pause
-                  </button>
-                )}
-
-                <button
-                  onClick={stop}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg font-bold shadow-lg transition-all text-white"
-                >
-                  <span>⏹</span> Stop
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* BOOK CONTENT AREA */}
-        <div
-          className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${
-            settings.theme === 'light'
-              ? 'bg-white'
-              : settings.theme === 'sepia'
-                ? 'bg-[#f4ecd8]'
-                : 'bg-gray-900'
-          }`}
-        >
-          {isLoading ? (
-            <div className="flex h-full items-center justify-center text-gray-400 animate-pulse">
-              Loading Book Content...
             </div>
-          ) : (
-            <BookViewer
-              bookStructure={bookStructure}
-              visualPageIndex={visualPageIndex}
-              globalSentenceIndex={globalSentenceIndex}
-              isPlaying={isPlaying}
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
+              {library.map((book) => (
+                <div
+                  key={book.id}
+                  onClick={() => openBook(book)}
+                  className="group relative cursor-pointer"
+                >
+                  <div className="aspect-[2/3] bg-zinc-800 rounded-xl mb-4 overflow-hidden shadow-xl group-hover:shadow-2xl group-hover:-translate-y-2 transition-all duration-300 border border-white/5 relative">
+                    {book.cover ? (
+                      <img src={book.cover} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-zinc-800 to-zinc-900 p-4 text-center">
+                        <span className="text-4xl mb-2">📖</span>
+                      </div>
+                    )}
+
+                    {/* Hover Overlay */}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="bg-white text-black px-4 py-2 rounded-full font-bold text-sm transform scale-90 group-hover:scale-100 transition-transform">
+                        Read
+                      </span>
+                    </div>
+                  </div>
+
+                  <h3 className="font-bold text-zinc-200 leading-tight truncate px-1">
+                    {book.title}
+                  </h3>
+                  <p className="text-xs text-zinc-500 mt-1 px-1">
+                    {new Date(book.dateAdded).toLocaleDateString()}
+                  </p>
+
+                  <button
+                    onClick={(e) => removeBook(book.id, e)}
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-red-500 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all z-10 backdrop-blur-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+
+              {library.length === 0 && (
+                <div
+                  onClick={handleImportNew}
+                  className="aspect-[2/3] border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 cursor-pointer transition"
+                >
+                  <span className="text-2xl mb-2">+</span>
+                  <span>Import EPUB</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* VIEW: READER */}
+        {viewMode === 'reader' && (
+          <div className="flex-1 flex flex-col h-full relative">
+            {/* Minimal Reader Header */}
+            <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-40 pointer-events-none">
+              <button
+                onClick={goBackToShelf}
+                className="pointer-events-auto w-10 h-10 rounded-full bg-zinc-900/50 backdrop-blur border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+              >
+                ←
+              </button>
+
+              {/* Floating Action Menu (Right Side) */}
+              <div className="pointer-events-auto flex gap-2">
+                <div className="relative">
+                  <button
+                    onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
+                    className="w-10 h-10 rounded-full bg-zinc-900/50 backdrop-blur border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+                  >
+                    Aa
+                  </button>
+                  <AppearanceMenu
+                    isOpen={isAppearanceOpen}
+                    onClose={() => setIsAppearanceOpen(false)}
+                    settings={settings}
+                    updateSetting={updateSetting}
+                  />
+                </div>
+                <button
+                  onClick={() => setIsTocOpen(!isTocOpen)}
+                  className="w-10 h-10 rounded-full bg-zinc-900/50 backdrop-blur border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+                >
+                  ☰
+                </button>
+              </div>
+            </div>
+
+            {/* Overlays */}
+            <TableOfContents
+              items={bookStructure.processedToc || []}
+              isOpen={isTocOpen}
+              onClose={() => setIsTocOpen(false)}
+              currentVisualPage={visualPageIndex}
               onChapterClick={handleChapterClick}
-              settings={settings} // <--- PASS SETTINGS
             />
-          )}
-        </div>
-      </div>
+
+            {/* Content Area */}
+            <div
+              className={`flex-1 overflow-y-auto scrollbar-thin transition-colors duration-500 ${
+                settings.theme === 'light'
+                  ? 'bg-[#fcfbf9]'
+                  : settings.theme === 'sepia'
+                    ? 'bg-[#f4ecd8]'
+                    : 'bg-[#18181b]' // Zinc-950 for Dark
+              }`}
+            >
+              {isLoading ? (
+                <div className="flex h-full items-center justify-center text-zinc-500 animate-pulse">
+                  Opening Book...
+                </div>
+              ) : (
+                <div className="pt-20 pb-40 px-4 md:px-0">
+                  {' '}
+                  {/* Padding for header/footer */}
+                  <BookViewer
+                    bookStructure={bookStructure}
+                    visualPageIndex={visualPageIndex}
+                    globalSentenceIndex={globalSentenceIndex}
+                    isPlaying={isPlaying}
+                    onChapterClick={handleChapterClick}
+                    settings={settings}
+                  />
+                  {/* Pagination - Simple Bottom */}
+                  <div
+                    className={`flex justify-center items-center gap-8 mt-10 pb-10 opacity-50 hover:opacity-100 transition-opacity ${settings.theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}
+                  >
+                    <button
+                      onClick={handlePrevPage}
+                      disabled={visualPageIndex === 0}
+                      className="hover:text-indigo-500 disabled:opacity-30"
+                    >
+                      Previous Page
+                    </button>
+                    <span className="font-mono text-xs">
+                      {visualPageIndex + 1} / {totalPages}
+                    </span>
+                    <button
+                      onClick={handleNextPage}
+                      disabled={visualPageIndex >= totalPages - 1}
+                      className="hover:text-indigo-500 disabled:opacity-30"
+                    >
+                      Next Page
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <FloatingPlayer />
+          </div>
+        )}
+      </main>
     </div>
   )
 }

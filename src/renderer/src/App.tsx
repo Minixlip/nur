@@ -11,9 +11,6 @@ function App(): React.JSX.Element {
   return (
     <Router>
       <div className="min-h-screen flex">
-        {/* Navbar now uses <Link> or navigate() internally */}
-        <Navbar />
-
         {/* Main Content */}
         <div className="bg-red-600 min-h-screen w-full">
           <Routes>
