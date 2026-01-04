@@ -27,8 +27,8 @@ interface HighlightTrigger {
 }
 
 // --- CONSTANTS ---
-const BATCH_RAMP = [15, 20, 25]
-const BATCH_SIZE_STANDARD = 35
+const BATCH_RAMP = [15, 15, 20]
+const BATCH_SIZE_STANDARD = 30
 
 // --- HELPER: Time Estimator ---
 const estimateSentenceDurations = (sentences: string[], totalDuration: number) => {

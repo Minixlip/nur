@@ -2,21 +2,28 @@ import React, { useState } from 'react'
 import { useBookImporter } from '../../../hooks/useBookImporter'
 import { useAudioPlayer } from '../../../hooks/useAudioPlayer'
 import { useLibrary } from '../../../hooks/useLibrary'
+import { useReaderSettings } from '../../../hooks/useReaderSettings' // <--- NEW HOOK
 import { BookViewer } from '../../bookViewer'
 import { TableOfContents } from '../../TableOfContents'
+import AppearanceMenu from '../../AppearanceMenu' // <--- NEW COMPONENT
 import { SavedBook } from '@renderer/env'
-import Settings from '../settings/Settings' // <--- IMPORT SETTINGS
+import Settings from '../settings/Settings'
 
 export default function Library(): React.JSX.Element {
   // --- 1. STATE MANAGEMENT ---
   const { library, addToLibrary, removeBook, updateProgress } = useLibrary()
   const [activeBookId, setActiveBookId] = useState<string | null>(null)
 
-  // UPDATED: Added 'settings' to view modes
+  // View Modes
   const [viewMode, setViewMode] = useState<'shelf' | 'reader' | 'settings'>('shelf')
 
+  // Reader State
   const [visualPageIndex, setVisualPageIndex] = useState(0)
   const [isTocOpen, setIsTocOpen] = useState(false)
+
+  // NEW: Appearance Menu State
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false)
+  const { settings, updateSetting } = useReaderSettings()
 
   // --- 2. HOOKS ---
   const { totalPages, bookTitle, isLoading, error, importBook, loadBookByPath, bookStructure } =
@@ -75,7 +82,7 @@ export default function Library(): React.JSX.Element {
     setViewMode('shelf')
   }
 
-  // --- 4. RENDER: SETTINGS MODE (NEW) ---
+  // --- 4. RENDER: SETTINGS MODE ---
   if (viewMode === 'settings') {
     return (
       <div className="min-h-screen bg-gray-900 relative">
@@ -101,7 +108,6 @@ export default function Library(): React.JSX.Element {
           <h1 className="text-3xl font-bold text-white">My Library</h1>
 
           <div className="flex gap-4">
-            {/* SETTINGS BUTTON (NEW) */}
             <button
               onClick={() => setViewMode('settings')}
               className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition shadow-lg border border-gray-700"
@@ -186,6 +192,7 @@ export default function Library(): React.JSX.Element {
 
       {/* READER CONTAINER */}
       <div className="relative max-w-4xl mx-auto bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 min-h-150 flex flex-col">
+        {/* OVERLAYS */}
         <TableOfContents
           items={bookStructure.processedToc || []}
           isOpen={isTocOpen}
@@ -196,6 +203,7 @@ export default function Library(): React.JSX.Element {
 
         {/* TOOLBAR */}
         <div className="bg-gray-750 p-4 border-b border-gray-700 flex justify-between items-center backdrop-blur-sm z-10">
+          {/* Navigation Controls */}
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrevPage}
@@ -228,7 +236,29 @@ export default function Library(): React.JSX.Element {
             </button>
           </div>
 
-          <div className="flex gap-2">
+          {/* Action Controls */}
+          <div className="flex gap-2 relative">
+            {/* NEW: APPEARANCE BUTTON */}
+            <button
+              onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
+              className={`px-3 py-2 rounded-lg font-bold transition-colors ${
+                isAppearanceOpen
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+              title="Appearance Settings"
+            >
+              Aa
+            </button>
+
+            {/* APPEARANCE MENU POPUP */}
+            <AppearanceMenu
+              isOpen={isAppearanceOpen}
+              onClose={() => setIsAppearanceOpen(false)}
+              settings={settings}
+              updateSetting={updateSetting}
+            />
+
             <button
               onClick={() => setIsTocOpen(!isTocOpen)}
               className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300"
@@ -274,7 +304,15 @@ export default function Library(): React.JSX.Element {
         </div>
 
         {/* BOOK CONTENT AREA */}
-        <div className="flex-1 p-8 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+        <div
+          className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent ${
+            settings.theme === 'light'
+              ? 'bg-white'
+              : settings.theme === 'sepia'
+                ? 'bg-[#f4ecd8]'
+                : 'bg-gray-900'
+          }`}
+        >
           {isLoading ? (
             <div className="flex h-full items-center justify-center text-gray-400 animate-pulse">
               Loading Book Content...
@@ -286,6 +324,7 @@ export default function Library(): React.JSX.Element {
               globalSentenceIndex={globalSentenceIndex}
               isPlaying={isPlaying}
               onChapterClick={handleChapterClick}
+              settings={settings} // <--- PASS SETTINGS
             />
           )}
         </div>
