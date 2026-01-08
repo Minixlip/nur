@@ -4,7 +4,13 @@ import { VisualBlock, TocItem } from '../types/book'
 const CHARS_PER_PAGE = 1500
 const MAX_BLOCKS_PER_PAGE = 12
 
-export function useBookPagination(rawChapters: string[], toc: any[], chapterHrefs: string[]) {
+export function useBookPagination(
+  rawChapters: string[],
+  toc: any[],
+  chapterHrefs: string[],
+  charsPerPage: number = CHARS_PER_PAGE,
+  maxBlocksPerPage: number = MAX_BLOCKS_PER_PAGE
+) {
   return useMemo(() => {
     const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
     const allSentences: string[] = []
@@ -64,8 +70,8 @@ export function useBookPagination(rawChapters: string[], toc: any[], chapterHref
 
       chapterBlocks.forEach((block) => {
         const blockLength = block.content.join(' ').length
-        const isFullText = currentLength + blockLength > CHARS_PER_PAGE
-        const isFullBlocks = currentPage.length >= MAX_BLOCKS_PER_PAGE
+        const isFullText = currentLength + blockLength > charsPerPage
+        const isFullBlocks = currentPage.length >= maxBlocksPerPage
 
         if ((isFullText || isFullBlocks) && currentPage.length > 0) {
           pagesStructure.push(currentPage)
@@ -107,5 +113,5 @@ export function useBookPagination(rawChapters: string[], toc: any[], chapterHref
     if (toc && Array.isArray(toc)) processTocItems(toc)
 
     return { allSentences, sentenceToPageMap, pagesStructure, processedToc }
-  }, [rawChapters, toc, chapterHrefs])
+  }, [rawChapters, toc, chapterHrefs, charsPerPage, maxBlocksPerPage])
 }

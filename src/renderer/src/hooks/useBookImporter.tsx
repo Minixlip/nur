@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ePub from 'epubjs'
 import { TocItem } from '../types/book'
 import { getMimeType, getZipFile, extractContentRecursively } from '../utils/epubUtils'
@@ -18,8 +18,38 @@ export function useBookImporter() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [charsPerPage, setCharsPerPage] = useState(1500)
+  const [maxBlocksPerPage, setMaxBlocksPerPage] = useState(12)
+
+  useEffect(() => {
+    const baseArea = 900 * 670
+    const baseChars = 1500
+    const baseBlocks = 12
+
+    const updateLayout = () => {
+      const width = window.innerWidth || 900
+      const height = window.innerHeight || 670
+      const areaScale = (width * height) / baseArea
+      const nextChars = Math.round(baseChars * areaScale)
+      const nextBlocks = Math.round(baseBlocks * (height / 670))
+
+      setCharsPerPage(Math.min(3600, Math.max(1200, nextChars)))
+      setMaxBlocksPerPage(Math.min(20, Math.max(8, nextBlocks)))
+    }
+
+    updateLayout()
+    window.addEventListener('resize', updateLayout)
+    return () => window.removeEventListener('resize', updateLayout)
+  }, [])
+
   // 1. Separate Pagination Logic
-  const bookStructure = useBookPagination(rawChapters, toc, chapterHrefs)
+  const bookStructure = useBookPagination(
+    rawChapters,
+    toc,
+    chapterHrefs,
+    charsPerPage,
+    maxBlocksPerPage
+  )
 
   // 2. Core Parse Logic
   const parseEpubData = async (buffer: ArrayBuffer) => {
