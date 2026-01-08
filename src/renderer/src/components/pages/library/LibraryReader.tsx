@@ -43,6 +43,7 @@ export default function LibraryReader(): React.JSX.Element {
       }
     })
   }, [bookId, activeBookId, loadBookById, navigate])
+  }, [bookId, loadBookById, navigate])
 
   return (
     <div className="flex-1 flex flex-col h-full relative">
