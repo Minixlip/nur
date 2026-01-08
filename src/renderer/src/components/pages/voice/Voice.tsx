@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 
 export default function Voice() {
   const [engine, setEngine] = useState('xtts')
@@ -27,9 +28,9 @@ export default function Voice() {
           ⚠️ You are currently using <strong>Piper TTS</strong>. Custom voice cloning is only
           available with <strong>Coqui XTTS</strong>.
           <br />
-          <a href="#/settings" className="underline hover:text-white">
+          <Link to="/settings" className="underline hover:text-white">
             Switch engine in Settings
-          </a>
+          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
