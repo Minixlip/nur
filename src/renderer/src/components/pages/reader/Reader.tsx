@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  HiOutlineListBullet,
-  HiAdjustmentsHorizontal,
-  HiChevronLeft,
-  HiChevronRight
-} from 'react-icons/hi2'
-import { HiPlay, HiPause, HiStop } from 'react-icons/hi'
+  FiList,
+  FiSliders,
+  FiChevronLeft,
+  FiChevronRight,
+  FiPlay,
+  FiPause,
+  FiStopCircle
+} from 'react-icons/fi'
 import { useAudioPlayer } from '../../../hooks/useAudioPlayer'
 import { useBookImporter } from '../../../hooks/useBookImporter'
 import { useLibrary, SavedBook } from '../../../hooks/useLibrary'
@@ -125,9 +127,9 @@ export default function Reader(): React.JSX.Element {
           aria-pressed={isPlaying && !isPaused}
         >
           {isPlaying && !isPaused ? (
-            <HiPause className={isCompactHeight ? 'text-base' : 'text-xl'} />
+            <FiPause className={isCompactHeight ? 'text-base' : 'text-xl'} />
           ) : (
-            <HiPlay className={isCompactHeight ? 'text-base' : 'text-xl'} />
+            <FiPlay className={isCompactHeight ? 'text-base' : 'text-xl'} />
           )}
         </button>
 
@@ -165,7 +167,7 @@ export default function Reader(): React.JSX.Element {
               className="text-zinc-400 hover:text-red-400 transition"
               aria-label="Stop playback"
             >
-              <HiStop />
+              <FiStopCircle />
             </button>
           )}
         </div>
@@ -175,14 +177,14 @@ export default function Reader(): React.JSX.Element {
             className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 transition flex items-center justify-center"
             aria-label="Open appearance settings"
           >
-            <HiAdjustmentsHorizontal className="text-sm" />
+            <FiSliders className="text-sm" />
           </button>
           <button
             onClick={() => setIsTocOpen(!isTocOpen)}
             className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 transition flex items-center justify-center"
             aria-label="Toggle table of contents"
           >
-            <HiOutlineListBullet className="text-sm" />
+            <FiList className="text-sm" />
           </button>
           <button
             onClick={handlePrevPage}
@@ -190,7 +192,7 @@ export default function Reader(): React.JSX.Element {
             className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 transition flex items-center justify-center disabled:opacity-40"
             aria-label="Previous page"
           >
-            <HiChevronLeft className="text-sm" />
+            <FiChevronLeft className="text-sm" />
           </button>
           <button
             onClick={handleNextPage}
@@ -198,14 +200,14 @@ export default function Reader(): React.JSX.Element {
             className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 transition flex items-center justify-center disabled:opacity-40"
             aria-label="Next page"
           >
-            <HiChevronRight className="text-sm" />
+            <FiChevronRight className="text-sm" />
           </button>
           <button
             onClick={stop}
             className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:text-red-400 hover:bg-white/10 transition flex items-center justify-center"
             aria-label="Stop playback"
           >
-            <HiStop className="text-sm" />
+            <FiStopCircle className="text-sm" />
           </button>
         </div>
       </div>
@@ -254,28 +256,8 @@ export default function Reader(): React.JSX.Element {
               onChapterClick={handleChapterClick}
               settings={settings}
             />
-            <div
-              className={`flex justify-center items-center gap-8 mt-10 pb-10 opacity-60 hover:opacity-100 transition-opacity ${
-                settings.theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'
-              }`}
-            >
-              <button
-                onClick={handlePrevPage}
-                disabled={visualPageIndex === 0}
-                className="hover:text-indigo-500 disabled:opacity-30"
-              >
-                Previous Page
-              </button>
-              <span className="font-mono text-xs">
-                {visualPageIndex + 1} / {totalPages}
-              </span>
-              <button
-                onClick={handleNextPage}
-                disabled={visualPageIndex >= totalPages - 1}
-                className="hover:text-indigo-500 disabled:opacity-30"
-              >
-                Next Page
-              </button>
+            <div className="mt-10 pb-10 text-center text-xs text-zinc-500">
+              Page {visualPageIndex + 1} of {totalPages}
             </div>
             {activeBook && isCompactHeight ? player : null}
           </div>
