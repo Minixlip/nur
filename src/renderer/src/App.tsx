@@ -26,7 +26,7 @@ function App(): React.JSX.Element {
           <main className="flex-1 relative flex flex-col h-full overflow-hidden bg-zinc-950/30 backdrop-blur-2xl border-l border-white/5">
             <Routes>
               <Route path="/" element={<Library />} />
-              <Route path="/read/:bookId" element={<Reader onToggleSidebar={toggleSidebar} />} />
+              <Route path="/read/:bookId" element={<Reader />} />
               <Route path="/voice-market" element={<Voice />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/downloads" element={<Downloads />} />
