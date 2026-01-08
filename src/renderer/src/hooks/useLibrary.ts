@@ -31,8 +31,9 @@ export function useLibrary() {
 
   // UPDATE: Accept cover argument
   const addToLibrary = async (filePath: string, title: string, cover: string | null) => {
-    await window.api.saveBook(filePath, title, cover)
+    const result = await window.api.saveBook(filePath, title, cover)
     await refreshLibrary()
+    return result?.book ?? null
   }
 
   const removeBook = async (id: string, e: React.MouseEvent) => {
