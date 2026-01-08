@@ -105,6 +105,37 @@ export default function Reader(): React.JSX.Element {
     )
   }
 
+  const playerTheme =
+    settings.theme === 'light'
+      ? {
+          shell: 'bg-white/95 text-zinc-900 border-black/10',
+          button: 'bg-zinc-900 text-white hover:bg-zinc-800',
+          iconButton: 'border-black/10 bg-black/5 text-zinc-700 hover:bg-black/10',
+          statusLabel: 'text-zinc-500',
+          statusValue: 'text-emerald-600',
+          separator: 'border-black/10',
+          wave: 'bg-zinc-700'
+        }
+      : settings.theme === 'sepia'
+        ? {
+            shell: 'bg-[#f1e8d5]/95 text-[#3b2f1f] border-black/10',
+            button: 'bg-[#3b2f1f] text-[#f4ecd8] hover:bg-[#2f2619]',
+            iconButton: 'border-black/10 bg-black/5 text-[#3b2f1f] hover:bg-black/10',
+            statusLabel: 'text-[#6a5a4a]',
+            statusValue: 'text-emerald-700',
+            separator: 'border-black/10',
+            wave: 'bg-[#3b2f1f]'
+          }
+        : {
+            shell: 'bg-white/10 text-zinc-100 border-white/20',
+            button: 'bg-white text-black hover:bg-zinc-200',
+            iconButton: 'border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10',
+            statusLabel: 'text-zinc-400',
+            statusValue: 'text-emerald-400',
+            separator: 'border-white/10',
+            wave: 'bg-white'
+          }
+
   const player = (
     <div
       className={`${
@@ -112,7 +143,7 @@ export default function Reader(): React.JSX.Element {
       } inset-x-0 z-50 flex justify-center px-4`}
     >
       <div
-        className={`w-full max-w-[720px] bg-white/10 backdrop-blur-2xl border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.45)] transition-all hover:bg-white/15 ${
+        className={`w-full max-w-[720px] backdrop-blur-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.45)] transition-all ${playerTheme.shell} ${
           isCompactHeight
             ? 'rounded-2xl px-4 py-2 flex items-center gap-3'
             : 'rounded-full pl-4 pr-6 py-3 flex items-center gap-4'
@@ -120,7 +151,7 @@ export default function Reader(): React.JSX.Element {
       >
         <button
           onClick={isPlaying ? (isPaused ? play : pause) : play}
-          className={`rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:bg-zinc-200 transition active:scale-95 ${
+          className={`rounded-full flex items-center justify-center shadow-lg transition active:scale-95 ${playerTheme.button} ${
             isCompactHeight ? 'w-10 h-10' : 'w-12 h-12'
           }`}
           aria-label={isPlaying && !isPaused ? 'Pause playback' : 'Start playback'}
@@ -142,7 +173,7 @@ export default function Reader(): React.JSX.Element {
             {[...Array(12)].map((_, i) => (
               <div
                 key={i}
-                className={`w-1 bg-white rounded-full transition-all duration-300 ${
+                className={`w-1 ${playerTheme.wave} rounded-full transition-all duration-300 ${
                   isPlaying && !isPaused ? 'animate-pulse' : ''
                 }`}
                 style={{ height: `${Math.random() * 20 + 8}px` }}
@@ -153,25 +184,27 @@ export default function Reader(): React.JSX.Element {
 
         <div
           className={`flex items-center gap-3 ${
-            isCompactHeight ? 'border-l border-white/10 pl-3' : 'border-l border-white/10 pl-4'
+            isCompactHeight
+              ? `border-l pl-3 ${playerTheme.separator}`
+              : `border-l pl-4 ${playerTheme.separator}`
           }`}
         >
           <div className="text-xs">
-            <div className="text-zinc-400">Status</div>
-            <div className="text-emerald-400 font-mono">{status}</div>
+            <div className={playerTheme.statusLabel}>Status</div>
+            <div className={`font-mono ${playerTheme.statusValue}`}>{status}</div>
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
-            className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 transition flex items-center justify-center"
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center ${playerTheme.iconButton}`}
             aria-label="Open appearance settings"
           >
             <FiSliders className="text-sm" />
           </button>
           <button
             onClick={() => setIsTocOpen(!isTocOpen)}
-            className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 transition flex items-center justify-center"
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center ${playerTheme.iconButton}`}
             aria-label="Toggle table of contents"
           >
             <FiList className="text-sm" />
@@ -179,7 +212,7 @@ export default function Reader(): React.JSX.Element {
           <button
             onClick={handlePrevPage}
             disabled={visualPageIndex === 0}
-            className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 transition flex items-center justify-center disabled:opacity-40"
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 ${playerTheme.iconButton}`}
             aria-label="Previous page"
           >
             <FiChevronLeft className="text-sm" />
@@ -187,14 +220,14 @@ export default function Reader(): React.JSX.Element {
           <button
             onClick={handleNextPage}
             disabled={visualPageIndex >= totalPages - 1}
-            className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 transition flex items-center justify-center disabled:opacity-40"
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 ${playerTheme.iconButton}`}
             aria-label="Next page"
           >
             <FiChevronRight className="text-sm" />
           </button>
           <button
             onClick={stop}
-            className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:text-red-400 hover:bg-white/10 transition flex items-center justify-center"
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center ${playerTheme.iconButton}`}
             aria-label="Stop playback"
           >
             <FiStopCircle className="text-sm" />
