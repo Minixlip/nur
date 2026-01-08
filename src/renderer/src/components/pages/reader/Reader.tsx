@@ -8,7 +8,11 @@ import AppearanceMenu from '../../AppearanceMenu'
 import { BookViewer } from '../../bookViewer'
 import { TableOfContents } from '../../TableOfContents'
 
-export default function Reader(): React.JSX.Element {
+type ReaderProps = {
+  onToggleSidebar: () => void
+}
+
+export default function Reader({ onToggleSidebar }: ReaderProps): React.JSX.Element {
   const { bookId } = useParams()
   const navigate = useNavigate()
   const { library, loadingLibrary, updateProgress } = useLibrary()
@@ -66,11 +70,6 @@ export default function Reader(): React.JSX.Element {
     if (activeBook) updateProgress(activeBook.id, pageIndex)
   }
 
-  const goBackToShelf = () => {
-    stop()
-    navigate('/')
-  }
-
   if (!bookId) {
     return (
       <div className="p-8 text-zinc-300">
@@ -85,7 +84,7 @@ export default function Reader(): React.JSX.Element {
         <p>Book not found.</p>
         <button
           onClick={() => navigate('/')}
-          className="mt-4 px-4 py-2 bg-white text-black rounded-lg"
+          className="mt-4 px-4 py-2 bg-white/90 text-black rounded-lg shadow"
         >
           Back to Library
         </button>
@@ -97,17 +96,19 @@ export default function Reader(): React.JSX.Element {
     <div className="flex-1 flex flex-col h-full relative">
       <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-40 pointer-events-none">
         <button
-          onClick={goBackToShelf}
-          className="pointer-events-auto w-10 h-10 rounded-full bg-zinc-900/50 backdrop-blur border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+          onClick={onToggleSidebar}
+          className="pointer-events-auto w-10 h-10 rounded-full bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center text-zinc-200 hover:text-white hover:bg-white/20 transition shadow-lg"
+          aria-label="Toggle sidebar"
         >
-          Back
+          Menu
         </button>
 
         <div className="pointer-events-auto flex gap-2">
           <div className="relative">
             <button
               onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
-              className="w-10 h-10 rounded-full bg-zinc-900/50 backdrop-blur border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+              className="w-10 h-10 rounded-full bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center text-zinc-200 hover:text-white hover:bg-white/20 transition shadow-lg"
+              aria-label="Open appearance settings"
             >
               Aa
             </button>
@@ -120,7 +121,8 @@ export default function Reader(): React.JSX.Element {
           </div>
           <button
             onClick={() => setIsTocOpen(!isTocOpen)}
-            className="w-10 h-10 rounded-full bg-zinc-900/50 backdrop-blur border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center text-zinc-200 hover:text-white hover:bg-white/20 transition shadow-lg"
+            aria-label="Toggle table of contents"
           >
             TOC
           </button>
@@ -141,7 +143,7 @@ export default function Reader(): React.JSX.Element {
             ? 'bg-[#fcfbf9]'
             : settings.theme === 'sepia'
               ? 'bg-[#f4ecd8]'
-              : 'bg-[#18181b]'
+              : 'bg-[#141416]'
         }`}
       >
         {isLoading ? (
@@ -151,7 +153,7 @@ export default function Reader(): React.JSX.Element {
         ) : error ? (
           <div className="flex h-full items-center justify-center text-red-400">{error}</div>
         ) : (
-          <div className="pt-20 pb-40 px-4 md:px-0">
+          <div className="pt-20 pb-48 px-4 md:px-0">
             <BookViewer
               bookStructure={bookStructure}
               visualPageIndex={visualPageIndex}
@@ -161,7 +163,7 @@ export default function Reader(): React.JSX.Element {
               settings={settings}
             />
             <div
-              className={`flex justify-center items-center gap-8 mt-10 pb-10 opacity-50 hover:opacity-100 transition-opacity ${
+              className={`flex justify-center items-center gap-8 mt-10 pb-10 opacity-60 hover:opacity-100 transition-opacity ${
                 settings.theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'
               }`}
             >
@@ -188,17 +190,18 @@ export default function Reader(): React.JSX.Element {
       </div>
 
       {activeBook && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
-          <div className="bg-zinc-900/90 backdrop-blur-2xl border border-white/10 pl-4 pr-6 py-3 rounded-full shadow-2xl flex items-center gap-6 transition-all hover:scale-105 hover:bg-zinc-900">
+        <div className="fixed bottom-6 inset-x-0 z-50 flex justify-center px-4">
+          <div className="w-full max-w-[720px] bg-white/10 backdrop-blur-2xl border border-white/20 pl-4 pr-6 py-3 rounded-full shadow-[0_20px_60px_rgba(0,0,0,0.45)] flex items-center gap-4 transition-all hover:bg-white/15">
             <button
               onClick={isPlaying ? (isPaused ? play : pause) : play}
               className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:bg-zinc-200 transition active:scale-95"
+              aria-label={isPlaying && !isPaused ? 'Pause playback' : 'Start playback'}
             >
               {isPlaying && !isPaused ? <span className="text-xl font-bold">Pause</span> : null}
               {!isPlaying || isPaused ? <span className="text-xl font-bold">Play</span> : null}
             </button>
 
-            <div className="flex flex-col gap-1 w-48">
+            <div className="flex flex-col gap-1 flex-1 min-w-[120px] max-w-[220px]">
               <div className="h-8 flex items-center gap-1 opacity-50">
                 {[...Array(12)].map((_, i) => (
                   <div
@@ -218,7 +221,11 @@ export default function Reader(): React.JSX.Element {
                 <div className="text-emerald-400 font-mono">{status}</div>
               </div>
 
-              <button onClick={stop} className="text-zinc-400 hover:text-red-400 transition">
+              <button
+                onClick={stop}
+                className="text-zinc-400 hover:text-red-400 transition"
+                aria-label="Stop playback"
+              >
                 Stop
               </button>
             </div>

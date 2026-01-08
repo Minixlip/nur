@@ -11,7 +11,6 @@ export default function Voice() {
   }, [])
 
   const handleUpload = async () => {
-    // Reuse your existing file dialog API
     const filePath = await window.api.openFileDialog()
     if (filePath) {
       setCustomVoicePath(filePath)
@@ -21,41 +20,44 @@ export default function Voice() {
 
   return (
     <div className="p-8 text-white">
-      <h1 className="text-3xl font-bold mb-8">Voice Studio</h1>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Voice Studio</h1>
+        <p className="text-zinc-400 mt-1">Manage your cloning presets and voice profiles.</p>
+      </div>
 
       {engine === 'piper' ? (
-        <div className="p-4 bg-yellow-900/30 text-yellow-200 rounded-lg border border-yellow-700">
-          ⚠️ You are currently using <strong>Piper TTS</strong>. Custom voice cloning is only
+        <div className="p-5 bg-white/5 text-zinc-200 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+          You are currently using <strong>Piper TTS</strong>. Custom voice cloning is only
           available with <strong>Coqui XTTS</strong>.
-          <br />
-          <Link to="/settings" className="underline hover:text-white">
-            Switch engine in Settings
-          </Link>
+          <div className="mt-3">
+            <Link to="/settings" className="underline hover:text-white">
+              Switch engine in Settings
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* CUSTOM VOICE CARD */}
-          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-            <h2 className="text-xl font-bold mb-4">✨ Custom Voice Clone</h2>
+          <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+            <h2 className="text-xl font-bold mb-4">Custom Voice Clone</h2>
             <p className="text-gray-400 text-sm mb-6">
-              Upload a 6-10 second .wav file of anyone's voice, and the AI will mimic it instantly.
+              Upload a 6-10 second .wav file of a voice, and the AI will mimic it instantly.
             </p>
 
             <div className="flex flex-col gap-4">
               <button
                 onClick={handleUpload}
-                className="w-full py-4 border-2 border-dashed border-gray-600 rounded-lg hover:border-indigo-500 hover:bg-gray-750 transition-all flex flex-col items-center justify-center gap-2"
+                className="w-full py-4 border-2 border-dashed border-white/10 rounded-xl hover:border-white/30 hover:bg-white/5 transition-all flex flex-col items-center justify-center gap-2"
               >
-                <span className="text-2xl">📂</span>
+                <span className="text-2xl">+</span>
                 <span className="font-semibold">Select Audio File</span>
               </button>
 
               {customVoicePath && (
-                <div className="bg-emerald-900/30 p-3 rounded-lg border border-emerald-700 flex items-center gap-3">
-                  <span className="text-emerald-400">✓</span>
+                <div className="bg-black/20 p-3 rounded-xl border border-white/10 flex items-center gap-3">
+                  <span className="text-zinc-200">Active</span>
                   <div className="overflow-hidden">
-                    <div className="text-xs text-gray-400 uppercase font-bold">Active Voice</div>
-                    <div className="text-sm truncate text-emerald-200" title={customVoicePath}>
+                    <div className="text-xs text-gray-400 uppercase font-bold">Voice</div>
+                    <div className="text-sm truncate text-zinc-200" title={customVoicePath}>
                       {customVoicePath.split(/[/\\]/).pop()}
                     </div>
                   </div>

@@ -5,6 +5,14 @@ button {
   cursor: pointer;
 }
 
+body {
+  font-family: 'Merriweather', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+  background: radial-gradient(1200px 800px at 15% 10%, rgba(63, 63, 70, 0.45), transparent),
+    radial-gradient(900px 700px at 90% 0%, rgba(24, 24, 27, 0.6), transparent),
+    linear-gradient(180deg, #0f0f10 0%, #0b0b0c 100%);
+  color: #e4e4e7;
+}
+
 /* Optional: Smooth scrolling */
 html {
   scroll-behavior: smooth;

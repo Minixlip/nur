@@ -3,31 +3,25 @@ import { useState, useEffect } from 'react'
 export default function Settings(): React.JSX.Element {
   const [engine, setEngine] = useState('xtts')
 
-  // Piper State
   const [piperStatus, setPiperStatus] = useState<'missing' | 'downloading' | 'ready'>('missing')
   const [piperPath, setPiperPath] = useState<string>('')
   const [progress, setProgress] = useState(0)
 
-  // NEW: Custom Voice State
   const [customVoicePath, setCustomVoicePath] = useState<string>('')
 
   useEffect(() => {
-    // 1. Load saved preferences
     const savedEngine = localStorage.getItem('tts_engine') || 'xtts'
     const savedVoice = localStorage.getItem('custom_voice_path') || ''
 
     setEngine(savedEngine)
     setCustomVoicePath(savedVoice)
 
-    // 2. Check if Piper is installed
     checkPiperModel()
 
-    // 3. Listen for download progress
     const unsubscribe = window.api.onDownloadProgress((p) => {
       setProgress(p)
       if (p >= 100) {
         setPiperStatus('ready')
-        // Optional: Auto-select Piper when download completes
         handleEngineChange('piper', true)
       }
     })
@@ -43,7 +37,6 @@ export default function Settings(): React.JSX.Element {
       localStorage.setItem('piper_model_path', path)
     } else {
       setPiperStatus('missing')
-      // If currently set to Piper but model is missing, revert to XTTS safely
       if (localStorage.getItem('tts_engine') === 'piper') {
         handleEngineChange('xtts')
       }
@@ -51,7 +44,7 @@ export default function Settings(): React.JSX.Element {
   }
 
   const handleDownload = async (e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent triggering card click
+    e.stopPropagation()
     setPiperStatus('downloading')
     setProgress(0)
 
@@ -67,7 +60,6 @@ export default function Settings(): React.JSX.Element {
   }
 
   const handleEngineChange = (newEngine: string, force = false) => {
-    // PREVENT selection if model is missing (unless forcing after download)
     if (newEngine === 'piper' && piperStatus !== 'ready' && !force) {
       return
     }
@@ -75,8 +67,6 @@ export default function Settings(): React.JSX.Element {
     setEngine(newEngine)
     localStorage.setItem('tts_engine', newEngine)
   }
-
-  // --- NEW: Voice Cloning Handlers ---
 
   const handleVoiceSelect = async () => {
     // @ts-ignore
@@ -94,22 +84,23 @@ export default function Settings(): React.JSX.Element {
 
   return (
     <div className="p-8 text-white h-full overflow-y-auto">
-      <h1 className="text-3xl font-bold mb-8">Settings</h1>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Settings</h1>
+        <p className="text-zinc-400 mt-1">Personalize your playback and voice settings.</p>
+      </div>
 
       <div className="max-w-3xl space-y-8">
-        {/* AUDIO ENGINE SECTION */}
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 space-y-6">
+        <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)] space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold">Audio Engine</h2>
           </div>
 
           <div className="space-y-4">
-            {/* OPTION A: XTTS (Always Available) */}
             <div
-              className={`rounded-xl border transition-all duration-200 overflow-hidden ${
+              className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
                 engine === 'xtts'
-                  ? 'bg-indigo-900/40 border-indigo-500 shadow-lg'
-                  : 'bg-gray-700/30 border-gray-600'
+                  ? 'bg-zinc-900/40 border-white/20 shadow-lg'
+                  : 'bg-white/5 border-white/10'
               }`}
             >
               <button
@@ -119,7 +110,7 @@ export default function Settings(): React.JSX.Element {
                 <div>
                   <div className="font-bold text-lg flex items-center gap-2">
                     Coqui XTTS
-                    <span className="text-xs bg-indigo-800 text-indigo-200 px-2 py-0.5 rounded border border-indigo-600">
+                    <span className="text-xs bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-white/10">
                       HQ
                     </span>
                   </div>
@@ -129,27 +120,26 @@ export default function Settings(): React.JSX.Element {
                   </div>
                 </div>
                 {engine === 'xtts' ? (
-                  <div className="h-6 w-6 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold">
-                    ✓
+                  <div className="h-6 w-6 rounded-full bg-white text-black flex items-center justify-center text-[10px] font-bold">
+                    OK
                   </div>
                 ) : (
-                  <div className="h-6 w-6 rounded-full border-2 border-gray-500"></div>
+                  <div className="h-6 w-6 rounded-full border-2 border-white/20"></div>
                 )}
               </button>
 
-              {/* VOICE CLONING SUB-SECTION (Only visible when XTTS is active) */}
               {engine === 'xtts' && (
-                <div className="px-5 pb-5 pt-2 border-t border-indigo-500/30 bg-black/20">
-                  <div className="mt-3 text-sm font-semibold text-indigo-300 mb-2">
+                <div className="px-5 pb-5 pt-2 border-t border-white/10 bg-black/20">
+                  <div className="mt-3 text-sm font-semibold text-zinc-300 mb-2">
                     Voice Cloning (Reference Audio)
                   </div>
 
                   <div className="flex items-center gap-3">
                     {customVoicePath ? (
-                      <div className="flex-1 bg-gray-900/50 border border-indigo-500/50 rounded-lg p-3 flex justify-between items-center">
+                      <div className="flex-1 bg-black/30 border border-white/10 rounded-lg p-3 flex justify-between items-center">
                         <div className="flex items-center gap-3 overflow-hidden">
-                          <div className="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs">
-                            🎤
+                          <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs text-zinc-300">
+                            WAV
                           </div>
                           <div className="truncate text-sm text-gray-200" title={customVoicePath}>
                             ...{customVoicePath.slice(-40)}
@@ -163,7 +153,7 @@ export default function Settings(): React.JSX.Element {
                         </button>
                       </div>
                     ) : (
-                      <div className="flex-1 text-xs text-gray-400 italic bg-gray-900/30 p-3 rounded-lg border border-dashed border-gray-600">
+                      <div className="flex-1 text-xs text-gray-400 italic bg-black/20 p-3 rounded-lg border border-dashed border-white/10">
                         Using Default Female Voice. Upload a short WAV file (6-10s) to clone a
                         voice.
                       </div>
@@ -171,7 +161,7 @@ export default function Settings(): React.JSX.Element {
 
                     <button
                       onClick={handleVoiceSelect}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-bold shadow transition hover:-translate-y-0.5"
+                      className="px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-bold shadow transition hover:-translate-y-0.5"
                     >
                       {customVoicePath ? 'Change Voice' : 'Select File'}
                     </button>
@@ -180,19 +170,17 @@ export default function Settings(): React.JSX.Element {
               )}
             </div>
 
-            {/* OPTION B: PIPER (Conditional State) */}
             <div
-              className={`w-full rounded-xl border transition-all duration-200 overflow-hidden relative ${
+              className={`w-full rounded-2xl border transition-all duration-200 overflow-hidden relative ${
                 engine === 'piper'
-                  ? 'bg-emerald-900/40 border-emerald-500 shadow-lg scale-[1.01]'
-                  : 'bg-gray-700/30 border-gray-600'
+                  ? 'bg-zinc-900/40 border-white/20 shadow-lg scale-[1.01]'
+                  : 'bg-white/5 border-white/10'
               }`}
             >
-              {/* Progress Bar Background (Only when downloading) */}
               {piperStatus === 'downloading' && (
-                <div className="absolute bottom-0 left-0 h-1 bg-emerald-500/20 w-full">
+                <div className="absolute bottom-0 left-0 h-1 bg-white/10 w-full">
                   <div
-                    className="h-full bg-emerald-500 transition-all duration-300"
+                    className="h-full bg-white/60 transition-all duration-300"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -202,7 +190,7 @@ export default function Settings(): React.JSX.Element {
                 <div>
                   <div className="font-bold text-lg flex items-center gap-2">
                     Piper TTS
-                    <span className="text-xs bg-emerald-900 text-emerald-300 px-2 py-0.5 rounded border border-emerald-700">
+                    <span className="text-xs bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-white/10">
                       FAST
                     </span>
                   </div>
@@ -211,37 +199,31 @@ export default function Settings(): React.JSX.Element {
                   </div>
                 </div>
 
-                {/* ACTION BUTTONS */}
                 {piperStatus === 'ready' ? (
-                  // STATE: READY -> Selectable Radio Button
                   <button
                     onClick={() => handleEngineChange('piper')}
                     className="h-full absolute inset-0 w-full flex justify-end items-center px-5 focus:outline-none"
                   >
                     {engine === 'piper' ? (
-                      <div className="h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold shadow-lg">
-                        ✓
+                      <div className="h-6 w-6 rounded-full bg-white text-black flex items-center justify-center text-[10px] font-bold shadow-lg">
+                        OK
                       </div>
                     ) : (
-                      <div className="h-6 w-6 rounded-full border-2 border-gray-500 hover:border-emerald-400 transition-colors"></div>
+                      <div className="h-6 w-6 rounded-full border-2 border-white/20 hover:border-white/50 transition-colors"></div>
                     )}
                   </button>
                 ) : piperStatus === 'downloading' ? (
-                  // STATE: DOWNLOADING -> Spinner / Text
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-emerald-400 font-mono">
-                      {Math.round(progress)}%
-                    </span>
-                    <div className="animate-spin h-5 w-5 border-2 border-emerald-500 border-t-transparent rounded-full"></div>
+                    <span className="text-sm text-zinc-200 font-mono">{Math.round(progress)}%</span>
+                    <div className="animate-spin h-5 w-5 border-2 border-white/70 border-t-transparent rounded-full"></div>
                   </div>
                 ) : (
-                  // STATE: MISSING -> Download Button (Primary Action)
                   <button
                     onClick={handleDownload}
-                    className="z-10 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95 flex items-center gap-2"
+                    className="z-10 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95 flex items-center gap-2"
                   >
                     <span>Download Model</span>
-                    <span className="bg-black/20 px-1.5 rounded text-xs">~60MB</span>
+                    <span className="bg-black/10 px-1.5 rounded text-xs">~60MB</span>
                   </button>
                 )}
               </div>
