@@ -44,7 +44,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps): 
       <div className={`flex items-center justify-between ${collapsed ? 'px-1' : 'px-2'}`}>
         <div
           className={`uppercase text-zinc-500 ${
-            collapsed ? 'text-[10px] tracking-[0.2em] truncate' : 'text-xs tracking-[0.35em]'
+            collapsed ? 'text-[10px] tracking-[0.2em] hidden' : 'text-xs tracking-[0.35em]'
           }`}
         >
           Nur

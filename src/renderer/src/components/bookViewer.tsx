@@ -66,7 +66,7 @@ export const BookViewer: React.FC<BookViewerProps> = ({
 
   return (
     <div
-      className={`max-w-2xl mx-auto min-h-[60vh] flex flex-col justify-start transition-all duration-300 ease-in-out`}
+      className={`w-full max-w-5xl mx-auto px-2 md:px-8 min-h-[60vh] flex flex-col justify-start transition-all duration-300 ease-in-out`}
     >
       {pageBlocks.map((block, blockIdx) => {
         // 1. IMAGE BLOCK

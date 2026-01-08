@@ -160,16 +160,6 @@ export default function Reader(): React.JSX.Element {
             <div className="text-zinc-400">Status</div>
             <div className="text-emerald-400 font-mono">{status}</div>
           </div>
-
-          {!isCompactHeight && (
-            <button
-              onClick={stop}
-              className="text-zinc-400 hover:text-red-400 transition"
-              aria-label="Stop playback"
-            >
-              <FiStopCircle />
-            </button>
-          )}
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -247,7 +237,7 @@ export default function Reader(): React.JSX.Element {
         ) : error ? (
           <div className="flex h-full items-center justify-center text-red-400">{error}</div>
         ) : (
-          <div className="pt-20 pb-48 px-4 md:px-0">
+          <div className="pt-20 pb-48 px-0">
             <BookViewer
               bookStructure={bookStructure}
               visualPageIndex={visualPageIndex}

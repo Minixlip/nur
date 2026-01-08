@@ -19,27 +19,24 @@ export const TableOfContents: React.FC<TocProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="absolute inset-0 bg-gray-900/95 z-50 flex flex-col backdrop-blur-sm animate-fade-in">
-      {/* Header */}
-      <div className="flex justify-between items-center p-6 border-b border-gray-700">
-        <h2 className="text-2xl font-bold text-white tracking-wide">Contents</h2>
+    <div className="absolute inset-0 z-50 flex flex-col bg-black/40 backdrop-blur-2xl animate-fade-in">
+      <div className="flex items-center justify-between p-6 border-b border-white/10 bg-white/5">
+        <h2 className="text-xl font-semibold text-white tracking-wide">Contents</h2>
         <button
           onClick={onClose}
-          className="p-2 hover:bg-gray-800 rounded-full text-gray-400 hover:text-white transition"
+          className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 transition flex items-center justify-center"
+          aria-label="Close table of contents"
         >
-          ✕
+          X
         </button>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-gray-600">
+      <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-white/20">
         {items.length === 0 && (
-          <div className="text-gray-500 text-center mt-10">No Table of Contents found</div>
+          <div className="text-zinc-500 text-center mt-10">No table of contents found.</div>
         )}
 
         {items.map((item, idx) => {
-          // Is this the active chapter?
-          // We check if the current page is >= this chapter's start, but < next chapter's start
           const nextItem = items[idx + 1]
           const isActive =
             currentVisualPage >= item.pageIndex &&
@@ -52,16 +49,16 @@ export const TableOfContents: React.FC<TocProps> = ({
                 onChapterClick(item.pageIndex)
                 onClose()
               }}
-              className={`
-                                w-full text-left px-6 py-4 rounded-lg text-lg transition-all duration-200 font-serif
-                                ${
-                                  isActive
-                                    ? 'bg-indigo-600/20 text-indigo-300 border-l-4 border-indigo-500 font-semibold'
-                                    : 'text-gray-300 hover:bg-gray-800 hover:pl-8 border-l-4 border-transparent'
-                                }
-                            `}
+              className={`w-full text-left px-5 py-3 rounded-xl text-base transition-all duration-200 ${
+                isActive
+                  ? 'bg-white/10 text-white border border-white/20 shadow-[0_10px_30px_rgba(0,0,0,0.35)]'
+                  : 'text-zinc-300 hover:bg-white/5 border border-transparent'
+              }`}
             >
-              {item.label}
+              <div className="flex items-center justify-between gap-4">
+                <span className="truncate">{item.label}</span>
+                <span className="text-xs text-zinc-500">{item.pageIndex + 1}</span>
+              </div>
             </button>
           )
         })}
