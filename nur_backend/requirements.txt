@@ -1,0 +1,22 @@
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+fastapi
+uvicorn[standard]
+pydantic
+
+# Coqui TTS
+tts
+
+# Keep NumPy/SciPy compatible with prebuilt wheels in deps (Python 3.10)
+numpy<2
+scipy<1.12
+
+# PyTorch (CUDA 12.1 specific build)
+torch==2.5.1+cu121
+torchaudio==2.5.1+cu121
+torchvision==0.20.1+cu121
+
+# Pinned Transformers to prevent Coqui "BeamSearch" & "Import" errors
+transformers==4.36.2
+
+piper-tts
