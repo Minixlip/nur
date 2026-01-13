@@ -36,9 +36,13 @@ interface CachedAudio {
 const DEFAULT_BATCH_RAMP = [10, 14, 20]
 const DEFAULT_BATCH_SIZE_STANDARD = 40
 const DEFAULT_MAX_TTS_CHARS = 200
+const DEFAULT_INITIAL_BUFFER = 3
+const DEFAULT_STEADY_BUFFER = 8
 const LOW_END_BATCH_RAMP = [6, 10, 14]
 const LOW_END_BATCH_SIZE_STANDARD = 24
 const LOW_END_MAX_TTS_CHARS = 140
+const LOW_END_INITIAL_BUFFER = 2
+const LOW_END_STEADY_BUFFER = 5
 const AUDIO_CACHE_LIMIT = 80
 const AUDIO_CACHE_DB = 'nur-audio-cache'
 const AUDIO_CACHE_STORE = 'audio'
@@ -438,13 +442,14 @@ export function useAudioPlayer({
     const batchRamp = lowEndMode ? LOW_END_BATCH_RAMP : DEFAULT_BATCH_RAMP
     const batchSizeStandard = lowEndMode ? LOW_END_BATCH_SIZE_STANDARD : DEFAULT_BATCH_SIZE_STANDARD
     const maxTtsChars = lowEndMode ? LOW_END_MAX_TTS_CHARS : DEFAULT_MAX_TTS_CHARS
+    const initialBuffer = lowEndMode ? LOW_END_INITIAL_BUFFER : DEFAULT_INITIAL_BUFFER
+    const steadyBuffer = lowEndMode ? LOW_END_STEADY_BUFFER : DEFAULT_STEADY_BUFFER
 
     const batches = buildBatches(visualPageIndex, batchRamp, batchSizeStandard, maxTtsChars)
 
     const audioPromises: Promise<AudioResult>[] = new Array(batches.length).fill(null)
     const decodedBuffers: Array<AudioBuffer | null> = new Array(batches.length).fill(null)
-    let bufferSize = 2
-    const steadyBuffer = 6
+    let bufferSize = initialBuffer
 
     const triggerGeneration = (index: number) => {
       if (index >= batches.length) return
@@ -573,7 +578,8 @@ export function useAudioPlayer({
             gainNode.connect(ctx.destination)
 
             source.start(start)
-            nextStartTimeRef.current = start + audioBuffer.duration
+            const overlap = Math.min(FADE_SEC, audioBuffer.duration * 0.25)
+            nextStartTimeRef.current = Math.max(start + 0.02, start + audioBuffer.duration - overlap)
 
             const durations = estimateSentenceDurations(batch.sentences, audioBuffer.duration)
             let accumulatedTime = 0
