@@ -62,6 +62,12 @@ export default function Library(): React.JSX.Element {
                 </div>
               )}
 
+              {typeof book.lastPageIndex === 'number' && book.lastPageIndex > 0 && (
+                <div className="absolute left-3 top-3 rounded-full bg-white/90 text-black text-[11px] font-semibold px-3 py-1 shadow-lg">
+                  Continue · Page {book.lastPageIndex + 1}
+                </div>
+              )}
+
               <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <span className="bg-white text-black px-4 py-2 rounded-full font-bold text-sm transform scale-90 group-hover:scale-100 transition-transform shadow-lg">
                   Read
@@ -73,6 +79,26 @@ export default function Library(): React.JSX.Element {
             <p className="text-xs text-zinc-500 mt-1 px-1">
               {new Date(book.dateAdded).toLocaleDateString()}
             </p>
+            {typeof book.lastPageIndex === 'number' &&
+              typeof book.totalPages === 'number' &&
+              book.totalPages > 0 && (
+                <div className="mt-3 px-1">
+                  <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-white/70"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(2, ((book.lastPageIndex + 1) / book.totalPages) * 100)
+                        )}%`
+                      }}
+                    />
+                  </div>
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    Page {book.lastPageIndex + 1} of {book.totalPages}
+                  </div>
+                </div>
+              )}
 
             <button
               onClick={(e) => removeBook(book.id, e)}

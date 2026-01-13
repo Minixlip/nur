@@ -46,6 +46,7 @@ export default function Reader(): React.JSX.Element {
   const pendingJumpRef = useRef<number | null>(null)
   const anchorSentenceRef = useRef<number | null>(null)
   const prevPagesKeyRef = useRef<string>('')
+  const activeBookIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     const updateCompact = () => setIsCompactHeight(window.innerHeight < 620)
@@ -62,7 +63,9 @@ export default function Reader(): React.JSX.Element {
 
     if (!book) return
     if (!initializedPageRef.current || lastLoadedIdRef.current !== book.id) {
-      setVisualPageIndex(book.lastPageIndex || 0)
+      const savedIndex = book.lastPageIndex ?? 0
+      lastProgressPageRef.current = savedIndex
+      setVisualPageIndex(savedIndex)
       initializedPageRef.current = true
     }
 
@@ -71,6 +74,14 @@ export default function Reader(): React.JSX.Element {
       loadBookByPath(book.path)
     }
   }, [bookId, library, loadingLibrary, loadBookByPath])
+
+  useEffect(() => {
+    if (activeBookIdRef.current !== activeBook?.id) {
+      activeBookIdRef.current = activeBook?.id ?? null
+      anchorSentenceRef.current = null
+      prevPagesKeyRef.current = ''
+    }
+  }, [activeBook?.id])
 
   useEffect(() => {
     if (!activeBook) return
@@ -82,7 +93,7 @@ export default function Reader(): React.JSX.Element {
 
     progressTimeoutRef.current = window.setTimeout(() => {
       lastProgressPageRef.current = visualPageIndex
-      updateProgress(activeBook.id, visualPageIndex)
+      updateProgress(activeBook.id, visualPageIndex, totalPages || undefined)
     }, 300)
 
     return () => {
@@ -107,14 +118,16 @@ export default function Reader(): React.JSX.Element {
   }
 
   useEffect(() => {
+    if (!activeBook || isLoading) return
     if (anchorSentenceRef.current !== null) return
     const anchor = getAnchorIndexForPage(visualPageIndex)
     if (anchor !== null) {
       anchorSentenceRef.current = anchor
     }
-  }, [visualPageIndex, bookStructure.pagesStructure.length])
+  }, [activeBook, isLoading, visualPageIndex, bookStructure.pagesStructure.length])
 
   useEffect(() => {
+    if (!activeBook || isLoading) return
     const pagesKey = `${bookStructure.pagesStructure.length}:${bookStructure.allSentences.length}`
     if (!prevPagesKeyRef.current) {
       prevPagesKeyRef.current = pagesKey
@@ -129,19 +142,20 @@ export default function Reader(): React.JSX.Element {
     if (typeof mappedPage === 'number' && mappedPage !== visualPageIndex) {
       setVisualPageIndex(mappedPage)
     }
-  }, [bookStructure.pagesStructure.length, bookStructure.allSentences.length])
+  }, [activeBook, isLoading, bookStructure.pagesStructure.length, bookStructure.allSentences.length])
 
   useEffect(() => {
+    if (!activeBook || isLoading) return
     const anchor = getAnchorIndexForPage(visualPageIndex)
     if (anchor !== null) {
       anchorSentenceRef.current = anchor
     }
-  }, [visualPageIndex])
+  }, [activeBook, isLoading, visualPageIndex])
 
   const handleNextPage = () => {
     setVisualPageIndex((p) => {
       const newPage = Math.min(totalPages - 1, p + 1)
-      if (activeBook) updateProgress(activeBook.id, newPage)
+      if (activeBook) updateProgress(activeBook.id, newPage, totalPages || undefined)
       return newPage
     })
   }
@@ -149,14 +163,14 @@ export default function Reader(): React.JSX.Element {
   const handlePrevPage = () => {
     setVisualPageIndex((p) => {
       const newPage = Math.max(0, p - 1)
-      if (activeBook) updateProgress(activeBook.id, newPage)
+      if (activeBook) updateProgress(activeBook.id, newPage, totalPages || undefined)
       return newPage
     })
   }
 
   const handleChapterClick = (pageIndex: number) => {
     setVisualPageIndex(pageIndex)
-    if (activeBook) updateProgress(activeBook.id, pageIndex)
+    if (activeBook) updateProgress(activeBook.id, pageIndex, totalPages || undefined)
   }
 
   const handleJumpToHighlight = () => {

@@ -40,6 +40,7 @@ interface SavedBook {
   cover?: string | null // <--- Add this
   dateAdded: string
   lastPageIndex?: number
+  totalPages?: number
 }
 
 declare global {
