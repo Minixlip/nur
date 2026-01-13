@@ -44,6 +44,8 @@ export default function Reader(): React.JSX.Element {
   const progressTimeoutRef = useRef<number | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const pendingJumpRef = useRef<number | null>(null)
+  const anchorSentenceRef = useRef<number | null>(null)
+  const prevPagesKeyRef = useRef<string>('')
 
   useEffect(() => {
     const updateCompact = () => setIsCompactHeight(window.innerHeight < 620)
@@ -89,6 +91,52 @@ export default function Reader(): React.JSX.Element {
       }
     }
   }, [activeBook, updateProgress, visualPageIndex])
+
+  const getAnchorIndexForPage = (pageIndex: number) => {
+    const pageBlocks = bookStructure.pagesStructure?.[pageIndex]
+    if (!pageBlocks || pageBlocks.length === 0) return null
+    for (const block of pageBlocks) {
+      if (block.type === 'image') {
+        return block.startIndex
+      }
+      if (block.content.length > 0) {
+        return block.startIndex
+      }
+    }
+    return null
+  }
+
+  useEffect(() => {
+    if (anchorSentenceRef.current !== null) return
+    const anchor = getAnchorIndexForPage(visualPageIndex)
+    if (anchor !== null) {
+      anchorSentenceRef.current = anchor
+    }
+  }, [visualPageIndex, bookStructure.pagesStructure.length])
+
+  useEffect(() => {
+    const pagesKey = `${bookStructure.pagesStructure.length}:${bookStructure.allSentences.length}`
+    if (!prevPagesKeyRef.current) {
+      prevPagesKeyRef.current = pagesKey
+      return
+    }
+    if (prevPagesKeyRef.current === pagesKey) return
+
+    prevPagesKeyRef.current = pagesKey
+    const anchor = anchorSentenceRef.current
+    if (anchor === null) return
+    const mappedPage = bookStructure.sentenceToPageMap[anchor]
+    if (typeof mappedPage === 'number' && mappedPage !== visualPageIndex) {
+      setVisualPageIndex(mappedPage)
+    }
+  }, [bookStructure.pagesStructure.length, bookStructure.allSentences.length])
+
+  useEffect(() => {
+    const anchor = getAnchorIndexForPage(visualPageIndex)
+    if (anchor !== null) {
+      anchorSentenceRef.current = anchor
+    }
+  }, [visualPageIndex])
 
   const handleNextPage = () => {
     setVisualPageIndex((p) => {
