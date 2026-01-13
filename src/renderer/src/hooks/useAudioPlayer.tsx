@@ -10,6 +10,7 @@ interface AudioPlayerProps {
   bookStructure: {
     allSentences: string[]
     sentenceToPageMap: number[]
+    pagesStructure?: { startIndex: number }[][]
   }
   visualPageIndex: number
   setVisualPageIndex: React.Dispatch<React.SetStateAction<number>>
@@ -34,6 +35,7 @@ interface CachedAudio {
 // --- CONSTANTS ---
 const BATCH_RAMP = [10, 14, 20]
 const BATCH_SIZE_STANDARD = 40
+const MAX_TTS_CHARS = 200
 const AUDIO_CACHE_LIMIT = 80
 const AUDIO_CACHE_DB = 'nur-audio-cache'
 const AUDIO_CACHE_STORE = 'audio'
@@ -188,14 +190,47 @@ export function useAudioPlayer({
 
   const buildBatches = (startPageIndex: number) => {
     const batches: AudioBatch[] = []
-    const startSentenceIndex = bookStructure.sentenceToPageMap.findIndex((p) => p === startPageIndex)
-    const safeStartIndex = startSentenceIndex >= 0 ? startSentenceIndex : 0
-    const activeSentences = bookStructure.allSentences.slice(safeStartIndex)
-    const getGlobalIndex = (localIndex: number) => safeStartIndex + localIndex
+    const orderedIndices: number[] = []
+    const pages = bookStructure.pagesStructure
+
+    if (pages && pages[startPageIndex]) {
+      for (let pageIdx = startPageIndex; pageIdx < pages.length; pageIdx++) {
+        const blocks = pages[pageIdx] || []
+        for (const block of blocks) {
+          if (block.type === 'image') {
+            orderedIndices.push(block.startIndex)
+          } else {
+            for (let i = 0; i < block.content.length; i++) {
+              orderedIndices.push(block.startIndex + i)
+            }
+          }
+        }
+      }
+    }
+
+    const safeStartIndex =
+      orderedIndices.length > 0
+        ? orderedIndices[0]
+        : bookStructure.sentenceToPageMap.findIndex((p) => p === startPageIndex)
+
+    const activeIndices =
+      orderedIndices.length > 0
+        ? orderedIndices
+        : bookStructure.allSentences.map((_, idx) => idx).slice(Math.max(0, safeStartIndex))
+
+    const activeSentences = activeIndices.map((idx) => bookStructure.allSentences[idx])
+    const getGlobalIndex = (localIndex: number) => activeIndices[localIndex]
+
+    if (startPageIndex === visualPageIndex) {
+      const firstIndices = activeIndices.slice(0, 6)
+      const firstTexts = firstIndices.map((idx) => bookStructure.allSentences[idx])
+      console.log('[TTS] Start page', startPageIndex, 'indices', firstIndices, firstTexts)
+    }
 
     let currentBatchText: string[] = []
     let currentBatchIndices: number[] = []
     let currentWordCount = 0
+    let currentCharCount = 0
     let batchIndex = 0
 
     for (let i = 0; i < activeSentences.length; i++) {
@@ -212,6 +247,7 @@ export function useAudioPlayer({
           currentBatchText = []
           currentBatchIndices = []
           currentWordCount = 0
+          currentCharCount = 0
           batchIndex++
         }
         batches.push({ text: '[[[IMAGE]]]', sentences: [text], globalIndices: [globalIdx] })
@@ -219,6 +255,7 @@ export function useAudioPlayer({
       }
 
       const wordCount = text.split(/\s+/).length
+      const nextCharCount = currentCharCount + (currentCharCount > 0 ? 1 : 0) + text.length
       currentBatchText.push(text)
       currentBatchIndices.push(globalIdx)
       currentWordCount += wordCount
@@ -226,7 +263,7 @@ export function useAudioPlayer({
       const targetSize =
         batchIndex < BATCH_RAMP.length ? BATCH_RAMP[batchIndex] : BATCH_SIZE_STANDARD
 
-      if (currentWordCount >= targetSize) {
+      if (currentWordCount >= targetSize || nextCharCount > MAX_TTS_CHARS) {
         batches.push({
           text: currentBatchText.join(' '),
           sentences: [...currentBatchText],
@@ -235,8 +272,10 @@ export function useAudioPlayer({
         currentBatchText = []
         currentBatchIndices = []
         currentWordCount = 0
+        currentCharCount = 0
         batchIndex++
       }
+      currentCharCount = nextCharCount
     }
     if (currentBatchText.length > 0) {
       batches.push({
@@ -373,6 +412,8 @@ export function useAudioPlayer({
     isPausedRef.current = false
     setIsPlaying(true)
     setIsPaused(false)
+    highlightScheduleRef.current = []
+    setGlobalSentenceIndex(-1)
 
     initAudioContext()
 
@@ -466,6 +507,10 @@ export function useAudioPlayer({
 
         const batch = batches[i]
         setStatus(`Reading segment ${i + 1}...`)
+
+        if (!audioPromises[i]) {
+          triggerGeneration(i)
+        }
 
         let result: AudioResult | null = null
         try {
@@ -598,3 +643,4 @@ export function useAudioPlayer({
 
   return { isPlaying, isPaused, globalSentenceIndex, status, play, pause, stop }
 }
+

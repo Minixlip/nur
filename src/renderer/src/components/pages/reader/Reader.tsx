@@ -41,10 +41,9 @@ export default function Reader(): React.JSX.Element {
   const lastLoadedIdRef = useRef<string | null>(null)
   const initializedPageRef = useRef(false)
   const lastProgressPageRef = useRef<number | null>(null)
-  const lastMapRef = useRef<number[] | null>(null)
   const progressTimeoutRef = useRef<number | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
-  const pendingJumpRef = useRef(false)
+  const pendingJumpRef = useRef<number | null>(null)
 
   useEffect(() => {
     const updateCompact = () => setIsCompactHeight(window.innerHeight < 620)
@@ -70,17 +69,6 @@ export default function Reader(): React.JSX.Element {
       loadBookByPath(book.path)
     }
   }, [bookId, library, loadingLibrary, loadBookByPath])
-
-  useEffect(() => {
-    const map = bookStructure.sentenceToPageMap
-    if (!map.length || globalSentenceIndex < 0) return
-    if (lastMapRef.current === map) return
-    lastMapRef.current = map
-    const pageForSentence = map[globalSentenceIndex]
-    if (pageForSentence !== undefined && pageForSentence !== visualPageIndex) {
-      setVisualPageIndex(pageForSentence)
-    }
-  }, [bookStructure.sentenceToPageMap, globalSentenceIndex, visualPageIndex])
 
   useEffect(() => {
     if (!activeBook) return
@@ -127,25 +115,24 @@ export default function Reader(): React.JSX.Element {
     if (globalSentenceIndex < 0) return
     const targetPage = bookStructure.sentenceToPageMap[globalSentenceIndex]
     if (targetPage === undefined) return
-    pendingJumpRef.current = true
+    pendingJumpRef.current = globalSentenceIndex
     if (targetPage !== visualPageIndex) {
       setVisualPageIndex(targetPage)
-    }
-    const container = scrollContainerRef.current
-    const scope = container ?? document
-    const current = scope.querySelector('[data-current-sentence=\"true\"]') as HTMLElement | null
-    if (current) {
-      current.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      pendingJumpRef.current = false
     }
   }
 
   useEffect(() => {
-    if (!pendingJumpRef.current) return
+    const targetSentence = pendingJumpRef.current
+    if (targetSentence === null) return
     const container = scrollContainerRef.current
-    if (!container) return
-    container.scrollTop = 0
-    pendingJumpRef.current = false
+    const scope = container ?? document
+    const current = scope.querySelector('[data-current-sentence="true"]') as
+      | HTMLElement
+      | null
+    if (current) {
+      current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      pendingJumpRef.current = null
+    }
   }, [visualPageIndex, globalSentenceIndex])
 
   if (!bookId) {
