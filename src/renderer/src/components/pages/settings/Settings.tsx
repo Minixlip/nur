@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useReaderSettings } from '../../../hooks/useReaderSettings'
 
 export default function Settings(): React.JSX.Element {
+  const { settings } = useReaderSettings()
   const [engine, setEngine] = useState('xtts')
   const [lowEndMode, setLowEndMode] = useState(false)
   const [initialBuffer, setInitialBuffer] = useState(3)
@@ -115,6 +117,30 @@ export default function Settings(): React.JSX.Element {
   const handleCrossfadeChange = (value: number) => {
     setCrossfadeMs(value)
     localStorage.setItem('audio_crossfade_ms', String(value))
+  }
+
+  const getSliderFill = () => {
+    if (settings.theme === 'light') return '#1f2937'
+    if (settings.theme === 'sepia') return '#6b4f2a'
+    return '#ffffff'
+  }
+
+  const getSliderThumbBorder = () => {
+    if (settings.theme === 'light') return 'rgba(31,41,55,0.7)'
+    if (settings.theme === 'sepia') return 'rgba(107,79,42,0.7)'
+    return 'rgba(255,255,255,0.7)'
+  }
+
+  const getSliderGlow = () => {
+    if (settings.theme === 'light') return 'rgba(31,41,55,0.15)'
+    if (settings.theme === 'sepia') return 'rgba(107,79,42,0.15)'
+    return 'rgba(255,255,255,0.18)'
+  }
+
+  const getSliderPercent = (value: number, min: number, max: number) => {
+    const clamped = Math.min(max, Math.max(min, value))
+    const percent = ((clamped - min) / (max - min)) * 100
+    return `${percent}%`
   }
 
   return (
@@ -304,8 +330,11 @@ export default function Settings(): React.JSX.Element {
           <div className="grid gap-4 pt-2">
             <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
               <div className="flex items-center justify-between text-sm text-zinc-200">
-                <span>Initial buffer (segments)</span>
-                <span className="font-semibold">{initialBuffer}</span>
+                <span className="font-medium text-zinc-200">Initial buffer (segments)</span>
+                <span className="font-semibold text-zinc-100">{initialBuffer}</span>
+              </div>
+              <div className="text-[11px] text-zinc-400 mt-1">
+                How many segments load before playback starts.
               </div>
               <input
                 type="range"
@@ -314,13 +343,24 @@ export default function Settings(): React.JSX.Element {
                 step={1}
                 value={initialBuffer}
                 onChange={(event) => handleInitialBufferChange(Number(event.target.value))}
-                className="mt-2 w-full accent-white"
+                className="mt-3 w-full glass-slider"
+                style={
+                  {
+                    '--slider-fill': getSliderFill(),
+                    '--slider-percent': getSliderPercent(initialBuffer, 1, 6),
+                    '--slider-thumb-border': getSliderThumbBorder(),
+                    '--slider-glow': getSliderGlow()
+                  } as React.CSSProperties
+                }
               />
             </div>
             <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
               <div className="flex items-center justify-between text-sm text-zinc-200">
-                <span>Steady buffer (segments)</span>
-                <span className="font-semibold">{steadyBuffer}</span>
+                <span className="font-medium text-zinc-200">Steady buffer (segments)</span>
+                <span className="font-semibold text-zinc-100">{steadyBuffer}</span>
+              </div>
+              <div className="text-[11px] text-zinc-400 mt-1">
+                Keeps playback smooth once it is running.
               </div>
               <input
                 type="range"
@@ -329,13 +369,24 @@ export default function Settings(): React.JSX.Element {
                 step={1}
                 value={steadyBuffer}
                 onChange={(event) => handleSteadyBufferChange(Number(event.target.value))}
-                className="mt-2 w-full accent-white"
+                className="mt-3 w-full glass-slider"
+                style={
+                  {
+                    '--slider-fill': getSliderFill(),
+                    '--slider-percent': getSliderPercent(steadyBuffer, 3, 14),
+                    '--slider-thumb-border': getSliderThumbBorder(),
+                    '--slider-glow': getSliderGlow()
+                  } as React.CSSProperties
+                }
               />
             </div>
             <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
               <div className="flex items-center justify-between text-sm text-zinc-200">
-                <span>Crossfade (ms)</span>
-                <span className="font-semibold">{crossfadeMs}</span>
+                <span className="font-medium text-zinc-200">Crossfade (ms)</span>
+                <span className="font-semibold text-zinc-100">{crossfadeMs}</span>
+              </div>
+              <div className="text-[11px] text-zinc-400 mt-1">
+                Blends adjacent segments to reduce gaps.
               </div>
               <input
                 type="range"
@@ -344,7 +395,15 @@ export default function Settings(): React.JSX.Element {
                 step={5}
                 value={crossfadeMs}
                 onChange={(event) => handleCrossfadeChange(Number(event.target.value))}
-                className="mt-2 w-full accent-white"
+                className="mt-3 w-full glass-slider"
+                style={
+                  {
+                    '--slider-fill': getSliderFill(),
+                    '--slider-percent': getSliderPercent(crossfadeMs, 0, 120),
+                    '--slider-thumb-border': getSliderThumbBorder(),
+                    '--slider-glow': getSliderGlow()
+                  } as React.CSSProperties
+                }
               />
             </div>
           </div>

@@ -79,11 +79,16 @@ export default function Library(): React.JSX.Element {
               <h3 className="font-semibold text-zinc-200 leading-snug truncate">
                 {book.title}
               </h3>
-              <div className="text-xs text-zinc-500 flex items-center justify-between">
-                <span>{new Date(book.dateAdded).toLocaleDateString()}</span>
-                {typeof book.lastPageIndex === 'number' && book.lastPageIndex > 0 && (
-                  <span className="text-[11px] text-zinc-400">Resume</span>
+              <div className="text-[11px] text-zinc-500 flex items-center justify-between uppercase tracking-wide">
+                <span>Added</span>
+                {typeof book.lastPageIndex === 'number' && book.lastPageIndex > 0 ? (
+                  <span className="text-[10px] text-emerald-300/80">Resume</span>
+                ) : (
+                  <span className="text-[10px] text-zinc-500">New</span>
                 )}
+              </div>
+              <div className="text-xs text-zinc-400">
+                {new Date(book.dateAdded).toLocaleDateString()}
               </div>
             </div>
             {typeof book.lastPageIndex === 'number' &&
