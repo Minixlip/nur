@@ -38,6 +38,8 @@ const DEFAULT_BATCH_SIZE_STANDARD = 40
 const DEFAULT_MAX_TTS_CHARS = 200
 const DEFAULT_INITIAL_BUFFER = 3
 const DEFAULT_STEADY_BUFFER = 8
+const DEFAULT_CROSSFADE_SEC = 0.03
+const MAX_CROSSFADE_SEC = 0.12
 const LOW_END_BATCH_RAMP = [6, 10, 14]
 const LOW_END_BATCH_SIZE_STANDARD = 24
 const LOW_END_MAX_TTS_CHARS = 140
@@ -48,7 +50,6 @@ const AUDIO_CACHE_DB = 'nur-audio-cache'
 const AUDIO_CACHE_STORE = 'audio'
 const AUDIO_CACHE_DISK_LIMIT = 120
 const ENABLE_PREWARM = false
-const FADE_SEC = 0.03
 
 // --- HELPER: Time Estimator ---
 const estimateSentenceDurations = (sentences: string[], totalDuration: number) => {
@@ -442,8 +443,18 @@ export function useAudioPlayer({
     const batchRamp = lowEndMode ? LOW_END_BATCH_RAMP : DEFAULT_BATCH_RAMP
     const batchSizeStandard = lowEndMode ? LOW_END_BATCH_SIZE_STANDARD : DEFAULT_BATCH_SIZE_STANDARD
     const maxTtsChars = lowEndMode ? LOW_END_MAX_TTS_CHARS : DEFAULT_MAX_TTS_CHARS
-    const initialBuffer = lowEndMode ? LOW_END_INITIAL_BUFFER : DEFAULT_INITIAL_BUFFER
-    const steadyBuffer = lowEndMode ? LOW_END_STEADY_BUFFER : DEFAULT_STEADY_BUFFER
+    const initialDefault = lowEndMode ? LOW_END_INITIAL_BUFFER : DEFAULT_INITIAL_BUFFER
+    const steadyDefault = lowEndMode ? LOW_END_STEADY_BUFFER : DEFAULT_STEADY_BUFFER
+    const storedInitial = Number(localStorage.getItem('audio_buffer_initial'))
+    const storedSteady = Number(localStorage.getItem('audio_buffer_steady'))
+    const storedCrossfadeMs = Number(localStorage.getItem('audio_crossfade_ms'))
+    const initialBuffer =
+      Number.isFinite(storedInitial) && storedInitial > 0 ? storedInitial : initialDefault
+    const steadyBuffer =
+      Number.isFinite(storedSteady) && storedSteady > 0 ? storedSteady : steadyDefault
+    const fadeSec = Number.isFinite(storedCrossfadeMs)
+      ? Math.min(MAX_CROSSFADE_SEC, Math.max(0, storedCrossfadeMs / 1000))
+      : DEFAULT_CROSSFADE_SEC
 
     const batches = buildBatches(visualPageIndex, batchRamp, batchSizeStandard, maxTtsChars)
 
@@ -570,15 +581,15 @@ export function useAudioPlayer({
             const start = Math.max(ctx.currentTime, nextStartTimeRef.current)
             const gainNode = ctx.createGain()
             gainNode.gain.setValueAtTime(0, start)
-            gainNode.gain.linearRampToValueAtTime(1, start + FADE_SEC)
+            gainNode.gain.linearRampToValueAtTime(1, start + fadeSec)
             const endTime = start + audioBuffer.duration
-            gainNode.gain.setValueAtTime(1, Math.max(start, endTime - FADE_SEC))
+            gainNode.gain.setValueAtTime(1, Math.max(start, endTime - fadeSec))
             gainNode.gain.linearRampToValueAtTime(0, endTime)
             source.connect(gainNode)
             gainNode.connect(ctx.destination)
 
             source.start(start)
-            const overlap = Math.min(FADE_SEC, audioBuffer.duration * 0.25)
+            const overlap = Math.min(fadeSec, audioBuffer.duration * 0.25)
             nextStartTimeRef.current = Math.max(start + 0.02, start + audioBuffer.duration - overlap)
 
             const durations = estimateSentenceDurations(batch.sentences, audioBuffer.duration)

@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react'
 export default function Settings(): React.JSX.Element {
   const [engine, setEngine] = useState('xtts')
   const [lowEndMode, setLowEndMode] = useState(false)
+  const [initialBuffer, setInitialBuffer] = useState(3)
+  const [steadyBuffer, setSteadyBuffer] = useState(8)
+  const [crossfadeMs, setCrossfadeMs] = useState(30)
 
   const [piperStatus, setPiperStatus] = useState<'missing' | 'downloading' | 'ready'>('missing')
   const [piperPath, setPiperPath] = useState<string>('')
@@ -14,10 +17,16 @@ export default function Settings(): React.JSX.Element {
     const savedEngine = localStorage.getItem('tts_engine') || 'xtts'
     const savedVoice = localStorage.getItem('custom_voice_path') || ''
     const savedLowEndMode = localStorage.getItem('low_end_mode') === 'true'
+    const savedInitialBuffer = Number(localStorage.getItem('audio_buffer_initial') || 3)
+    const savedSteadyBuffer = Number(localStorage.getItem('audio_buffer_steady') || 8)
+    const savedCrossfadeMs = Number(localStorage.getItem('audio_crossfade_ms') || 30)
 
     setEngine(savedEngine)
     setCustomVoicePath(savedVoice)
     setLowEndMode(savedLowEndMode)
+    setInitialBuffer(Number.isFinite(savedInitialBuffer) ? savedInitialBuffer : 3)
+    setSteadyBuffer(Number.isFinite(savedSteadyBuffer) ? savedSteadyBuffer : 8)
+    setCrossfadeMs(Number.isFinite(savedCrossfadeMs) ? savedCrossfadeMs : 30)
 
     checkPiperModel()
 
@@ -91,6 +100,21 @@ export default function Settings(): React.JSX.Element {
       localStorage.setItem('low_end_mode', String(next))
       return next
     })
+  }
+
+  const handleInitialBufferChange = (value: number) => {
+    setInitialBuffer(value)
+    localStorage.setItem('audio_buffer_initial', String(value))
+  }
+
+  const handleSteadyBufferChange = (value: number) => {
+    setSteadyBuffer(value)
+    localStorage.setItem('audio_buffer_steady', String(value))
+  }
+
+  const handleCrossfadeChange = (value: number) => {
+    setCrossfadeMs(value)
+    localStorage.setItem('audio_crossfade_ms', String(value))
   }
 
   return (
@@ -279,6 +303,53 @@ export default function Settings(): React.JSX.Element {
               }`}
             >
               {lowEndMode ? 'Enabled' : 'Off'}
+            </div>
+          </div>
+          <div className="grid gap-4 pt-2">
+            <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="flex items-center justify-between text-sm text-zinc-200">
+                <span>Initial buffer (segments)</span>
+                <span className="font-semibold">{initialBuffer}</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={6}
+                step={1}
+                value={initialBuffer}
+                onChange={(event) => handleInitialBufferChange(Number(event.target.value))}
+                className="mt-2 w-full accent-white"
+              />
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="flex items-center justify-between text-sm text-zinc-200">
+                <span>Steady buffer (segments)</span>
+                <span className="font-semibold">{steadyBuffer}</span>
+              </div>
+              <input
+                type="range"
+                min={3}
+                max={14}
+                step={1}
+                value={steadyBuffer}
+                onChange={(event) => handleSteadyBufferChange(Number(event.target.value))}
+                className="mt-2 w-full accent-white"
+              />
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="flex items-center justify-between text-sm text-zinc-200">
+                <span>Crossfade (ms)</span>
+                <span className="font-semibold">{crossfadeMs}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={120}
+                step={5}
+                value={crossfadeMs}
+                onChange={(event) => handleCrossfadeChange(Number(event.target.value))}
+                className="mt-2 w-full accent-white"
+              />
             </div>
           </div>
         </div>
