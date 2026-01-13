@@ -66,7 +66,7 @@ export const BookViewer: React.FC<BookViewerProps> = ({
 
   return (
     <div
-      className="w-full mx-auto px-4 md:px-10 min-h-[60vh] flex flex-col justify-start transition-all duration-300 ease-in-out"
+      className="reader-prose w-full mx-auto px-4 md:px-10 min-h-[60vh] flex flex-col justify-start transition-all duration-300 ease-in-out"
       style={{ maxWidth: 'clamp(640px, 72vw, 1200px)' }}
     >
       {pageBlocks.map((block, blockIdx) => {
@@ -104,7 +104,7 @@ export const BookViewer: React.FC<BookViewerProps> = ({
               className="w-full text-left mt-8 mb-6 group"
             >
               <span
-                className={`text-3xl md:text-4xl font-bold tracking-tight transition-colors ${
+                className={`text-3xl md:text-4xl font-bold tracking-tight transition-colors text-balance ${
                   settings.theme === 'dark'
                     ? 'text-zinc-100 group-hover:text-white'
                     : 'text-zinc-900 group-hover:text-black'
@@ -120,7 +120,7 @@ export const BookViewer: React.FC<BookViewerProps> = ({
         return (
           <p
             key={blockIdx}
-            className={`mb-6 text-lg md:text-xl leading-relaxed transition-all duration-300 ${getFontFamily()} ${getThemeTextClass()}`}
+            className={`reader-paragraph mb-6 text-lg md:text-xl leading-relaxed transition-all duration-300 ${getFontFamily()} ${getThemeTextClass()}`}
             style={{
               fontSize: `${settings.fontSize}%`,
               lineHeight: settings.lineHeight

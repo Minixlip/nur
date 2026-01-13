@@ -75,6 +75,18 @@ body {
   color: #e4e4e7;
 }
 
+.reader-prose {
+  text-rendering: optimizeLegibility;
+}
+
+.reader-paragraph {
+  text-wrap: pretty;
+  hyphens: auto;
+  orphans: 3;
+  widows: 3;
+  letter-spacing: 0.01em;
+}
+
 /* Optional: Smooth scrolling */
 html {
   scroll-behavior: smooth;
