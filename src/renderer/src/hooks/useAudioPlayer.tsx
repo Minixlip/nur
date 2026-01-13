@@ -26,16 +26,100 @@ interface HighlightTrigger {
   globalIndex: number
 }
 
+interface CachedAudio {
+  status: string
+  audio_data: Uint8Array | null
+}
+
 // --- CONSTANTS ---
-const BATCH_RAMP = [15, 15, 20]
-const BATCH_SIZE_STANDARD = 30
+const BATCH_RAMP = [10, 14, 20]
+const BATCH_SIZE_STANDARD = 40
+const AUDIO_CACHE_LIMIT = 80
+const AUDIO_CACHE_DB = 'nur-audio-cache'
+const AUDIO_CACHE_STORE = 'audio'
+const AUDIO_CACHE_DISK_LIMIT = 120
+const ENABLE_PREWARM = false
 
 // --- HELPER: Time Estimator ---
 const estimateSentenceDurations = (sentences: string[], totalDuration: number) => {
-  const wordCounts = sentences.map((s) => Math.max(1, s.trim().split(/\s+/).length))
-  const totalWords = wordCounts.reduce((a, b) => a + b, 0)
-  return wordCounts.map((count) => (count / totalWords) * totalDuration)
+  const basePerSentence = 0.12
+  const weights = sentences.map((s) => {
+    const wordCount = Math.max(1, s.trim().split(/\s+/).length)
+    const punctuationBoost = (s.match(/[.!?]/g) || []).length * 0.6
+    const commaBoost = (s.match(/[,;:]/g) || []).length * 0.25
+    return wordCount + punctuationBoost + commaBoost
+  })
+
+  const totalWeight = weights.reduce((a, b) => a + b, 0)
+  const baseTotal = basePerSentence * sentences.length
+  const remaining = Math.max(0.1, totalDuration - baseTotal)
+
+  return weights.map((weight) => basePerSentence + (weight / totalWeight) * remaining)
 }
+
+const openAudioCache = () =>
+  new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(AUDIO_CACHE_DB, 1)
+
+    request.onupgradeneeded = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains(AUDIO_CACHE_STORE)) {
+        const store = db.createObjectStore(AUDIO_CACHE_STORE, { keyPath: 'key' })
+        store.createIndex('updatedAt', 'updatedAt', { unique: false })
+      }
+    }
+
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+
+const getCachedAudioFromDisk = async (db: IDBDatabase, key: string) =>
+  new Promise<CachedAudio | null>((resolve) => {
+    const tx = db.transaction(AUDIO_CACHE_STORE, 'readonly')
+    const store = tx.objectStore(AUDIO_CACHE_STORE)
+    const req = store.get(key)
+    req.onsuccess = () => {
+      const result = req.result
+      if (result?.data) {
+        resolve({ status: 'success', audio_data: new Uint8Array(result.data) })
+      } else {
+        resolve(null)
+      }
+    }
+    req.onerror = () => resolve(null)
+  })
+
+const setCachedAudioOnDisk = async (db: IDBDatabase, key: string, data: Uint8Array) =>
+  new Promise<void>((resolve) => {
+    const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite')
+    const store = tx.objectStore(AUDIO_CACHE_STORE)
+    store.put({ key, data: data.buffer, updatedAt: Date.now() })
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => resolve()
+  })
+
+const pruneDiskCache = async (db: IDBDatabase) =>
+  new Promise<void>((resolve) => {
+    const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite')
+    const store = tx.objectStore(AUDIO_CACHE_STORE)
+    const index = store.index('updatedAt')
+    const keysToDelete: IDBValidKey[] = []
+    let count = 0
+
+    index.openCursor().onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result
+      if (!cursor) {
+        const excess = Math.max(0, count - AUDIO_CACHE_DISK_LIMIT)
+        const toRemove = keysToDelete.slice(0, excess)
+        toRemove.forEach((key) => store.delete(key))
+        resolve()
+        return
+      }
+      count += 1
+      keysToDelete.push(cursor.primaryKey)
+      cursor.continue()
+    }
+  })
 
 export function useAudioPlayer({
   bookStructure,
@@ -57,101 +141,54 @@ export function useAudioPlayer({
 
   // Session Tracking
   const currentSessionId = useRef<string>('')
+  const audioCacheRef = useRef<Map<string, CachedAudio>>(new Map())
+  const audioCacheKeysRef = useRef<string[]>([])
+  const audioCacheDbRef = useRef<IDBDatabase | null>(null)
+  const prewarmTimeoutRef = useRef<number | null>(null)
 
   const initAudioContext = () => {
     if (!audioCtxRef.current) {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext
       audioCtxRef.current = new AudioContext()
     }
-    // Always ensure it's running when we init
     if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume()
   }
 
-  // --- CONTROLS ---
-
-  const pause = async () => {
-    if (!isPlayingRef.current || isPausedRef.current) return
-    console.log('Pausing...')
-
-    isPausedRef.current = true
-    setIsPaused(true)
-
-    if (audioCtxRef.current) {
-      await audioCtxRef.current.suspend()
-    }
-    setStatus('Paused')
-  }
-
-  const stop = async () => {
-    console.log('Stopping...')
-    stopSignalRef.current = true
-    isPlayingRef.current = false
-    isPausedRef.current = false
-
-    // 1. INVALIDATE SESSION
-    currentSessionId.current = ''
-    await window.api.setSession('')
-
-    // 2. RESET STATE
-    setIsPlaying(false)
-    setIsPaused(false)
-    setStatus('Stopped')
-    setGlobalSentenceIndex(-1)
-
-    // 3. CLEANUP
-    highlightScheduleRef.current = []
-
-    if (audioCtxRef.current) {
-      try {
-        await audioCtxRef.current.close()
-        audioCtxRef.current = null
-      } catch (e) {
-        console.error(e)
-      }
-    }
-
-    await window.api.stop()
-  }
-
-  const play = async () => {
-    // A. RESUME IF PAUSED
-    if (isPausedRef.current) {
-      console.log('Resuming...')
-      isPausedRef.current = false
-      setIsPaused(false)
-      if (audioCtxRef.current) {
-        await audioCtxRef.current.resume()
-      }
-      setStatus('Resuming...')
-      return
-    }
-
-    // B. START FRESH
-    if (isPlayingRef.current) return
-
-    stopSignalRef.current = false
-    isPlayingRef.current = true
-    isPausedRef.current = false
-    setIsPlaying(true)
-    setIsPaused(false)
-
-    initAudioContext()
-
+  const decodeToBuffer = async (result: CachedAudio): Promise<AudioBuffer | null> => {
     const ctx = audioCtxRef.current
-    if (!ctx) return
+    if (!ctx || !result.audio_data) return null
+    try {
+      const rawData = result.audio_data
+      const cleanBuffer = rawData.buffer.slice(
+        rawData.byteOffset,
+        rawData.byteOffset + rawData.byteLength
+      ) as ArrayBuffer
+      return await ctx.decodeAudioData(cleanBuffer)
+    } catch (err) {
+      console.error('Decode Error', err)
+      return null
+    }
+  }
 
-    nextStartTimeRef.current = ctx.currentTime + 0.1
+  const buildCacheKey = (text: string, engine: string, voicePath: string | null, speed: number) =>
+    `${engine}:${voicePath || 'default'}:${speed}:${text}`
 
-    // New Session
-    const newSessionId = Date.now().toString()
-    currentSessionId.current = newSessionId
-    await window.api.setSession(newSessionId)
+  const setCache = (key: string, value: CachedAudio) => {
+    const cache = audioCacheRef.current
+    if (!cache.has(key)) {
+      audioCacheKeysRef.current.push(key)
+    }
+    cache.set(key, value)
 
-    // --- BUILD BATCHES ---
+    if (audioCacheKeysRef.current.length > AUDIO_CACHE_LIMIT) {
+      const oldest = audioCacheKeysRef.current.shift()
+      if (oldest) cache.delete(oldest)
+    }
+  }
+
+  const buildBatches = (startPageIndex: number) => {
     const batches: AudioBatch[] = []
-    const startSentenceIndex = bookStructure.sentenceToPageMap.findIndex(
-      (p) => p === visualPageIndex
-    )
+    const startSentenceIndex = bookStructure.sentenceToPageMap.findIndex((p) => p === startPageIndex)
     const safeStartIndex = startSentenceIndex >= 0 ? startSentenceIndex : 0
     const activeSentences = bookStructure.allSentences.slice(safeStartIndex)
     const getGlobalIndex = (localIndex: number) => safeStartIndex + localIndex
@@ -209,9 +246,151 @@ export function useAudioPlayer({
       })
     }
 
-    // --- PIPELINE ---
+    return batches
+  }
+
+  useEffect(() => {
+    let isMounted = true
+    openAudioCache()
+      .then((db) => {
+        if (isMounted) audioCacheDbRef.current = db
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+      if (audioCacheDbRef.current) {
+        audioCacheDbRef.current.close()
+        audioCacheDbRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!ENABLE_PREWARM) return
+    if (isPlayingRef.current) return
+    if (!bookStructure.allSentences.length || !bookStructure.sentenceToPageMap.length) return
+
+    if (prewarmTimeoutRef.current) window.clearTimeout(prewarmTimeoutRef.current)
+    prewarmTimeoutRef.current = window.setTimeout(async () => {
+      const batches = buildBatches(visualPageIndex)
+      const firstBatch = batches[0]
+      if (!firstBatch || firstBatch.text === '[[[IMAGE]]]' || !firstBatch.text.trim()) return
+
+      const engine = localStorage.getItem('tts_engine') || 'xtts'
+      const voicePath =
+        engine === 'piper'
+          ? localStorage.getItem('piper_model_path')
+          : localStorage.getItem('custom_voice_path')
+      const speed = 1.2
+      const cacheKey = buildCacheKey(firstBatch.text, engine, voicePath, speed)
+      const cached = audioCacheRef.current.get(cacheKey)
+      if (cached) return
+
+      const db = audioCacheDbRef.current
+      if (db) {
+        const diskHit = await getCachedAudioFromDisk(db, cacheKey)
+        if (diskHit) {
+          setCache(cacheKey, diskHit)
+          return
+        }
+      }
+
+      const result = await window.api.generate(firstBatch.text, speed, 'prewarm', {
+        engine: engine,
+        voicePath: voicePath
+      })
+      if (result?.status === 'success' && result.audio_data) {
+        setCache(cacheKey, result as CachedAudio)
+        if (db) {
+          await setCachedAudioOnDisk(db, cacheKey, result.audio_data)
+          await pruneDiskCache(db)
+        }
+      }
+    }, 350)
+
+    return () => {
+      if (prewarmTimeoutRef.current) window.clearTimeout(prewarmTimeoutRef.current)
+    }
+  }, [visualPageIndex, bookStructure.allSentences, bookStructure.sentenceToPageMap])
+
+  const pause = async () => {
+    if (!isPlayingRef.current || isPausedRef.current) return
+    console.log('Pausing...')
+
+    isPausedRef.current = true
+    setIsPaused(true)
+
+    if (audioCtxRef.current) {
+      await audioCtxRef.current.suspend()
+    }
+    setStatus('Paused')
+  }
+
+  const stop = async () => {
+    console.log('Stopping...')
+    stopSignalRef.current = true
+    isPlayingRef.current = false
+    isPausedRef.current = false
+
+    currentSessionId.current = ''
+    await window.api.setSession('')
+
+    setIsPlaying(false)
+    setIsPaused(false)
+    setStatus('Stopped')
+    setGlobalSentenceIndex(-1)
+
+    highlightScheduleRef.current = []
+
+    if (audioCtxRef.current) {
+      try {
+        await audioCtxRef.current.close()
+        audioCtxRef.current = null
+      } catch (e) {
+        console.error(e)
+      }
+    }
+
+    await window.api.stop()
+  }
+
+  const play = async () => {
+    if (isPausedRef.current) {
+      console.log('Resuming...')
+      isPausedRef.current = false
+      setIsPaused(false)
+      if (audioCtxRef.current) {
+        await audioCtxRef.current.resume()
+      }
+      setStatus('Resuming...')
+      return
+    }
+
+    if (isPlayingRef.current) return
+
+    stopSignalRef.current = false
+    isPlayingRef.current = true
+    isPausedRef.current = false
+    setIsPlaying(true)
+    setIsPaused(false)
+
+    initAudioContext()
+
+    const ctx = audioCtxRef.current
+    if (!ctx) return
+
+    nextStartTimeRef.current = ctx.currentTime + 0.1
+
+    const newSessionId = Date.now().toString()
+    currentSessionId.current = newSessionId
+    await window.api.setSession(newSessionId)
+
+    const batches = buildBatches(visualPageIndex)
+
     const audioPromises: Promise<AudioResult>[] = new Array(batches.length).fill(null)
-    const BUFFER_SIZE = 3
+    const decodedBuffers: Array<AudioBuffer | null> = new Array(batches.length).fill(null)
+    let bufferSize = 2
+    const steadyBuffer = 6
 
     const triggerGeneration = (index: number) => {
       if (index >= batches.length) return
@@ -220,33 +399,64 @@ export function useAudioPlayer({
       if (batch.text === '[[[IMAGE]]]') {
         audioPromises[index] = Promise.resolve({ status: 'skipped', audio_data: null })
       } else {
-        // --- NEW: RETRIEVE PREFERENCES (UPDATED LOGIC) ---
         const engine = localStorage.getItem('tts_engine') || 'xtts'
-
-        // Pick the correct path variable based on the engine
         const voicePath =
           engine === 'piper'
             ? localStorage.getItem('piper_model_path')
             : localStorage.getItem('custom_voice_path')
+        const speed = 1.2
+        const cacheKey = buildCacheKey(batch.text, engine, voicePath, speed)
+        const cached = audioCacheRef.current.get(cacheKey)
 
-        // Pass everything to the backend
-        audioPromises[index] = window.api.generate(batch.text, 1.2, newSessionId, {
-          engine: engine,
-          voicePath: voicePath
-        })
+        const resolveAndMaybeDecode = async () => {
+          const db = audioCacheDbRef.current
+          if (db) {
+            const diskHit = await getCachedAudioFromDisk(db, cacheKey)
+            if (diskHit) {
+              setCache(cacheKey, diskHit)
+              const decoded = await decodeToBuffer(diskHit)
+              decodedBuffers[index] = decoded
+              return diskHit
+            }
+          }
+
+          const result = await window.api.generate(batch.text, speed, newSessionId, {
+            engine: engine,
+            voicePath: voicePath
+          })
+
+          if (result?.status === 'success' && result.audio_data) {
+            setCache(cacheKey, result as CachedAudio)
+            if (db) {
+              await setCachedAudioOnDisk(db, cacheKey, result.audio_data)
+              await pruneDiskCache(db)
+            }
+            const decoded = await decodeToBuffer(result as CachedAudio)
+            decodedBuffers[index] = decoded
+          }
+          return result
+        }
+
+        if (cached) {
+          audioPromises[index] = Promise.resolve(cached).then(async (result) => {
+            const decoded = await decodeToBuffer(result as CachedAudio)
+            decodedBuffers[index] = decoded
+            return result
+          })
+        } else {
+          audioPromises[index] = resolveAndMaybeDecode()
+        }
       }
     }
 
     try {
       setStatus('Buffering...')
-      const initialFetch = Math.min(batches.length, BUFFER_SIZE)
+      const initialFetch = Math.min(batches.length, bufferSize)
       for (let i = 0; i < initialFetch; i++) triggerGeneration(i)
 
       if (batches.length > 0) await audioPromises[0]
 
-      // --- MAIN LOOP ---
       for (let i = 0; i < batches.length; i++) {
-        // PAUSE CHECK
         while (isPausedRef.current) {
           if (stopSignalRef.current) break
           await new Promise((r) => setTimeout(r, 200))
@@ -266,9 +476,9 @@ export function useAudioPlayer({
         }
 
         if (stopSignalRef.current) break
-        triggerGeneration(i + BUFFER_SIZE)
+        if (i === 0) bufferSize = steadyBuffer
+        triggerGeneration(i + bufferSize)
 
-        // IMAGE
         if (result && result.status === 'skipped') {
           const idx = batch.globalIndices[0]
 
@@ -283,15 +493,14 @@ export function useAudioPlayer({
           continue
         }
 
-        // AUDIO
         if (result && result.status === 'success' && result.audio_data) {
           try {
-            const rawData = result.audio_data
-            const cleanBuffer = rawData.buffer.slice(
-              rawData.byteOffset,
-              rawData.byteOffset + rawData.byteLength
-            ) as ArrayBuffer
-            const audioBuffer = await ctx.decodeAudioData(cleanBuffer)
+            let audioBuffer = decodedBuffers[i]
+            if (!audioBuffer) {
+              audioBuffer = await decodeToBuffer(result as CachedAudio)
+              if (audioBuffer) decodedBuffers[i] = audioBuffer
+            }
+            if (!audioBuffer) continue
 
             const source = ctx.createBufferSource()
             source.buffer = audioBuffer
@@ -301,11 +510,10 @@ export function useAudioPlayer({
             source.start(start)
             nextStartTimeRef.current = start + audioBuffer.duration
 
-            // SCHEDULING
             const durations = estimateSentenceDurations(batch.sentences, audioBuffer.duration)
             let accumulatedTime = 0
             durations.forEach((dur, idx) => {
-              const triggerTime = start + accumulatedTime
+              const triggerTime = start + accumulatedTime + 0.08
               highlightScheduleRef.current.push({
                 time: triggerTime,
                 globalIndex: batch.globalIndices[idx]
@@ -315,7 +523,6 @@ export function useAudioPlayer({
 
             highlightScheduleRef.current.sort((a, b) => a.time - b.time)
 
-            // Relax CPU
             const timeUntilNext = nextStartTimeRef.current - ctx.currentTime
             if (timeUntilNext > 4) {
               let waitTime = (timeUntilNext - 2) * 1000
@@ -350,7 +557,6 @@ export function useAudioPlayer({
     }
   }
 
-  // --- HIGHLIGHT SYNC LOOP ---
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isPlayingRef.current || isPausedRef.current || !audioCtxRef.current) return
@@ -373,8 +579,6 @@ export function useAudioPlayer({
         const trigger = schedule[lastPassedIndex]
         setGlobalSentenceIndex((prev) => {
           if (prev !== trigger.globalIndex) {
-            const page = bookStructure.sentenceToPageMap[trigger.globalIndex]
-            setVisualPageIndex((c) => (c !== page ? page : c))
             return trigger.globalIndex
           }
           return prev

@@ -127,11 +127,12 @@ export const BookViewer: React.FC<BookViewerProps> = ({
           >
             {block.content.map((sentence, localIdx) => {
               const myGlobalIndex = block.startIndex + localIdx
-              const isCurrent = myGlobalIndex === globalSentenceIndex && isPlaying
+              const isCurrent = myGlobalIndex === globalSentenceIndex
 
               return (
                 <span
                   key={localIdx}
+                  data-current-sentence={isCurrent ? 'true' : undefined}
                   className={`transition-colors duration-300 px-0.5 rounded-sm ${
                     isCurrent ? getHighlightClass() : ''
                   }`}

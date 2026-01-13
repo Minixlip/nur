@@ -7,7 +7,8 @@ import {
   FiChevronRight,
   FiPlay,
   FiPause,
-  FiStopCircle
+  FiStopCircle,
+  FiCrosshair
 } from 'react-icons/fi'
 import { useAudioPlayer } from '../../../hooks/useAudioPlayer'
 import { useBookImporter } from '../../../hooks/useBookImporter'
@@ -38,6 +39,12 @@ export default function Reader(): React.JSX.Element {
   })
 
   const lastLoadedIdRef = useRef<string | null>(null)
+  const initializedPageRef = useRef(false)
+  const lastProgressPageRef = useRef<number | null>(null)
+  const lastMapRef = useRef<number[] | null>(null)
+  const progressTimeoutRef = useRef<number | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const pendingJumpRef = useRef(false)
 
   useEffect(() => {
     const updateCompact = () => setIsCompactHeight(window.innerHeight < 620)
@@ -53,14 +60,47 @@ export default function Reader(): React.JSX.Element {
     setActiveBook(book)
 
     if (!book) return
-
-    setVisualPageIndex(book.lastPageIndex || 0)
+    if (!initializedPageRef.current || lastLoadedIdRef.current !== book.id) {
+      setVisualPageIndex(book.lastPageIndex || 0)
+      initializedPageRef.current = true
+    }
 
     if (lastLoadedIdRef.current !== book.id) {
       lastLoadedIdRef.current = book.id
       loadBookByPath(book.path)
     }
   }, [bookId, library, loadingLibrary, loadBookByPath])
+
+  useEffect(() => {
+    const map = bookStructure.sentenceToPageMap
+    if (!map.length || globalSentenceIndex < 0) return
+    if (lastMapRef.current === map) return
+    lastMapRef.current = map
+    const pageForSentence = map[globalSentenceIndex]
+    if (pageForSentence !== undefined && pageForSentence !== visualPageIndex) {
+      setVisualPageIndex(pageForSentence)
+    }
+  }, [bookStructure.sentenceToPageMap, globalSentenceIndex, visualPageIndex])
+
+  useEffect(() => {
+    if (!activeBook) return
+    if (lastProgressPageRef.current === visualPageIndex) return
+
+    if (progressTimeoutRef.current) {
+      window.clearTimeout(progressTimeoutRef.current)
+    }
+
+    progressTimeoutRef.current = window.setTimeout(() => {
+      lastProgressPageRef.current = visualPageIndex
+      updateProgress(activeBook.id, visualPageIndex)
+    }, 300)
+
+    return () => {
+      if (progressTimeoutRef.current) {
+        window.clearTimeout(progressTimeoutRef.current)
+      }
+    }
+  }, [activeBook, updateProgress, visualPageIndex])
 
   const handleNextPage = () => {
     setVisualPageIndex((p) => {
@@ -82,6 +122,31 @@ export default function Reader(): React.JSX.Element {
     setVisualPageIndex(pageIndex)
     if (activeBook) updateProgress(activeBook.id, pageIndex)
   }
+
+  const handleJumpToHighlight = () => {
+    if (globalSentenceIndex < 0) return
+    const targetPage = bookStructure.sentenceToPageMap[globalSentenceIndex]
+    if (targetPage === undefined) return
+    pendingJumpRef.current = true
+    if (targetPage !== visualPageIndex) {
+      setVisualPageIndex(targetPage)
+    }
+    const container = scrollContainerRef.current
+    const scope = container ?? document
+    const current = scope.querySelector('[data-current-sentence=\"true\"]') as HTMLElement | null
+    if (current) {
+      current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      pendingJumpRef.current = false
+    }
+  }
+
+  useEffect(() => {
+    if (!pendingJumpRef.current) return
+    const container = scrollContainerRef.current
+    if (!container) return
+    container.scrollTop = 0
+    pendingJumpRef.current = false
+  }, [visualPageIndex, globalSentenceIndex])
 
   if (!bookId) {
     return (
@@ -196,6 +261,13 @@ export default function Reader(): React.JSX.Element {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button
+            onClick={handleJumpToHighlight}
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center ${playerTheme.iconButton}`}
+            aria-label="Jump to current highlighted passage"
+          >
+            <FiCrosshair className="text-sm" />
+          </button>
+          <button
             onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
             className={`h-9 w-9 rounded-full border transition flex items-center justify-center ${playerTheme.iconButton}`}
             aria-label="Open appearance settings"
@@ -255,6 +327,7 @@ export default function Reader(): React.JSX.Element {
       />
 
       <div
+        ref={scrollContainerRef}
         className={`flex-1 overflow-y-auto scrollbar-thin transition-colors duration-500 ${
           settings.theme === 'light'
             ? 'bg-[#fcfbf9]'

@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import io
 import scipy.io.wavfile
+import inspect
 
 from piper import PiperVoice 
 from TTS.api import TTS
@@ -44,6 +45,20 @@ print("✅ XTTS Ready")
 # 2. Piper State (Loaded Dynamically)
 piper_voice = None
 loaded_piper_path = None
+
+def trim_silence_int16(samples, sample_rate, threshold=500, pad_ms=30):
+    if samples is None or len(samples) == 0:
+        return samples
+    abs_samples = np.abs(samples)
+    non_silent = np.where(abs_samples > threshold)[0]
+    if non_silent.size == 0:
+        return samples
+    start = int(non_silent[0])
+    end = int(non_silent[-1]) + 1
+    pad = int(sample_rate * (pad_ms / 1000.0))
+    start = max(0, start - pad)
+    end = min(len(samples), end + pad)
+    return samples[start:end]
 
 # Warmup XTTS (UPDATED FIX)
 print("☕ Warming up XTTS...")
@@ -130,6 +145,7 @@ def generate_speech(request: SpeakRequest):
 
                 # Convert raw PCM (16-bit) to Numpy Array
                 audio_np = np.frombuffer(raw_audio, dtype=np.int16)
+                audio_np = trim_silence_int16(audio_np, piper_voice.config.sample_rate)
                 
                 # Write proper WAV file using Scipy
                 out_buf = io.BytesIO()
@@ -149,16 +165,24 @@ def generate_speech(request: SpeakRequest):
                 if request.session_id != state.active_session_id:
                     raise HTTPException(status_code=499, detail="Request cancelled")
 
-                wav_out = xtts_model.tts(
-                    text=request.text,
-                    speaker_wav=request.speaker_wav,
-                    language=request.language,
-                    speed=request.speed
-                )
+                tts_kwargs = {
+                    "text": request.text,
+                    "speaker_wav": request.speaker_wav,
+                    "language": request.language,
+                    "speed": request.speed
+                }
+                tts_params = inspect.signature(xtts_model.tts).parameters
+                if "split_sentences" in tts_params:
+                    tts_kwargs["split_sentences"] = False
+                elif "enable_text_splitting" in tts_params:
+                    tts_kwargs["enable_text_splitting"] = False
+
+                wav_out = xtts_model.tts(**tts_kwargs)
                 
                 wav_np = np.array(wav_out)
                 wav_np = np.clip(wav_np, -1, 1) 
                 wav_int16 = (wav_np * 32767).astype(np.int16)
+                wav_int16 = trim_silence_int16(wav_int16, 24000)
 
                 out_buf = io.BytesIO()
                 scipy.io.wavfile.write(out_buf, 24000, wav_int16)
