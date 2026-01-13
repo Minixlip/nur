@@ -33,9 +33,12 @@ interface CachedAudio {
 }
 
 // --- CONSTANTS ---
-const BATCH_RAMP = [10, 14, 20]
-const BATCH_SIZE_STANDARD = 40
-const MAX_TTS_CHARS = 200
+const DEFAULT_BATCH_RAMP = [10, 14, 20]
+const DEFAULT_BATCH_SIZE_STANDARD = 40
+const DEFAULT_MAX_TTS_CHARS = 200
+const LOW_END_BATCH_RAMP = [6, 10, 14]
+const LOW_END_BATCH_SIZE_STANDARD = 24
+const LOW_END_MAX_TTS_CHARS = 140
 const AUDIO_CACHE_LIMIT = 80
 const AUDIO_CACHE_DB = 'nur-audio-cache'
 const AUDIO_CACHE_STORE = 'audio'
@@ -189,7 +192,12 @@ export function useAudioPlayer({
     }
   }
 
-  const buildBatches = (startPageIndex: number) => {
+  const buildBatches = (
+    startPageIndex: number,
+    batchRamp: number[],
+    batchSizeStandard: number,
+    maxTtsChars: number
+  ) => {
     const batches: AudioBatch[] = []
     const orderedIndices: number[] = []
     const pages = bookStructure.pagesStructure
@@ -256,9 +264,9 @@ export function useAudioPlayer({
       currentWordCount += wordCount
 
       const targetSize =
-        batchIndex < BATCH_RAMP.length ? BATCH_RAMP[batchIndex] : BATCH_SIZE_STANDARD
+        batchIndex < batchRamp.length ? batchRamp[batchIndex] : batchSizeStandard
 
-      if (currentWordCount >= targetSize || nextCharCount > MAX_TTS_CHARS) {
+      if (currentWordCount >= targetSize || nextCharCount > maxTtsChars) {
         batches.push({
           text: currentBatchText.join(' '),
           sentences: [...currentBatchText],
@@ -306,7 +314,12 @@ export function useAudioPlayer({
 
     if (prewarmTimeoutRef.current) window.clearTimeout(prewarmTimeoutRef.current)
     prewarmTimeoutRef.current = window.setTimeout(async () => {
-      const batches = buildBatches(visualPageIndex)
+      const lowEndMode = localStorage.getItem('low_end_mode') === 'true'
+      const batchRamp = lowEndMode ? LOW_END_BATCH_RAMP : DEFAULT_BATCH_RAMP
+      const batchSizeStandard = lowEndMode ? LOW_END_BATCH_SIZE_STANDARD : DEFAULT_BATCH_SIZE_STANDARD
+      const maxTtsChars = lowEndMode ? LOW_END_MAX_TTS_CHARS : DEFAULT_MAX_TTS_CHARS
+
+      const batches = buildBatches(visualPageIndex, batchRamp, batchSizeStandard, maxTtsChars)
       const firstBatch = batches[0]
       if (!firstBatch || firstBatch.text === '[[[IMAGE]]]' || !firstBatch.text.trim()) return
 
@@ -421,7 +434,12 @@ export function useAudioPlayer({
     currentSessionId.current = newSessionId
     await window.api.setSession(newSessionId)
 
-    const batches = buildBatches(visualPageIndex)
+    const lowEndMode = localStorage.getItem('low_end_mode') === 'true'
+    const batchRamp = lowEndMode ? LOW_END_BATCH_RAMP : DEFAULT_BATCH_RAMP
+    const batchSizeStandard = lowEndMode ? LOW_END_BATCH_SIZE_STANDARD : DEFAULT_BATCH_SIZE_STANDARD
+    const maxTtsChars = lowEndMode ? LOW_END_MAX_TTS_CHARS : DEFAULT_MAX_TTS_CHARS
+
+    const batches = buildBatches(visualPageIndex, batchRamp, batchSizeStandard, maxTtsChars)
 
     const audioPromises: Promise<AudioResult>[] = new Array(batches.length).fill(null)
     const decodedBuffers: Array<AudioBuffer | null> = new Array(batches.length).fill(null)
@@ -432,7 +450,7 @@ export function useAudioPlayer({
       if (index >= batches.length) return
       const batch = batches[index]
 
-      if (batch.text === '[[[IMAGE]]]') {
+      if (batch.text === '[[[IMAGE]]]' ) {
         audioPromises[index] = Promise.resolve({ status: 'skipped', audio_data: null })
       } else {
         const engine = localStorage.getItem('tts_engine') || 'xtts'
@@ -553,6 +571,7 @@ export function useAudioPlayer({
             gainNode.gain.linearRampToValueAtTime(0, endTime)
             source.connect(gainNode)
             gainNode.connect(ctx.destination)
+
             source.start(start)
             nextStartTimeRef.current = start + audioBuffer.duration
 
@@ -644,4 +663,3 @@ export function useAudioPlayer({
 
   return { isPlaying, isPaused, globalSentenceIndex, status, play, pause, stop }
 }
-

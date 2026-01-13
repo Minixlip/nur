@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 
 export default function Settings(): React.JSX.Element {
   const [engine, setEngine] = useState('xtts')
+  const [lowEndMode, setLowEndMode] = useState(false)
 
   const [piperStatus, setPiperStatus] = useState<'missing' | 'downloading' | 'ready'>('missing')
   const [piperPath, setPiperPath] = useState<string>('')
@@ -12,9 +13,11 @@ export default function Settings(): React.JSX.Element {
   useEffect(() => {
     const savedEngine = localStorage.getItem('tts_engine') || 'xtts'
     const savedVoice = localStorage.getItem('custom_voice_path') || ''
+    const savedLowEndMode = localStorage.getItem('low_end_mode') === 'true'
 
     setEngine(savedEngine)
     setCustomVoicePath(savedVoice)
+    setLowEndMode(savedLowEndMode)
 
     checkPiperModel()
 
@@ -80,6 +83,14 @@ export default function Settings(): React.JSX.Element {
   const handleResetVoice = () => {
     setCustomVoicePath('')
     localStorage.removeItem('custom_voice_path')
+  }
+
+  const handleLowEndToggle = () => {
+    setLowEndMode((prev) => {
+      const next = !prev
+      localStorage.setItem('low_end_mode', String(next))
+      return next
+    })
   }
 
   return (
@@ -227,6 +238,47 @@ export default function Settings(): React.JSX.Element {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)] space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Performance</h2>
+              <p className="text-sm text-zinc-400 mt-1">
+                Reduce buffering on low-end devices by using smaller audio batches.
+              </p>
+            </div>
+            <button
+              onClick={handleLowEndToggle}
+              className={`relative inline-flex h-7 w-14 items-center rounded-full border transition-all ${
+                lowEndMode ? 'bg-white/90 border-white/80' : 'bg-white/10 border-white/20'
+              }`}
+              aria-pressed={lowEndMode}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-black transition-all ${
+                  lowEndMode ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+            <div>
+              <div className="text-sm font-semibold text-zinc-200">Low-end device mode</div>
+              <div className="text-xs text-zinc-400">
+                Smaller chunks, steadier playback, slightly more pauses between segments.
+              </div>
+            </div>
+            <div
+              className={`text-xs font-semibold px-2 py-1 rounded-full border ${
+                lowEndMode
+                  ? 'bg-emerald-400/10 text-emerald-200 border-emerald-300/30'
+                  : 'bg-white/5 text-zinc-300 border-white/10'
+              }`}
+            >
+              {lowEndMode ? 'Enabled' : 'Off'}
             </div>
           </div>
         </div>
