@@ -155,9 +155,7 @@ export default function Settings(): React.JSX.Element {
                   </div>
                 </div>
                 {engine === 'xtts' ? (
-                  <div className="h-6 w-6 rounded-full bg-white text-black flex items-center justify-center text-[10px] font-bold">
-                    OK
-                  </div>
+                  <div className="h-6 w-6 rounded-full bg-white shadow-inner shadow-black/20"></div>
                 ) : (
                   <div className="h-6 w-6 rounded-full border-2 border-white/20"></div>
                 )}
@@ -240,9 +238,7 @@ export default function Settings(): React.JSX.Element {
                     className="h-full absolute inset-0 w-full flex justify-end items-center px-5 focus:outline-none"
                   >
                     {engine === 'piper' ? (
-                      <div className="h-6 w-6 rounded-full bg-white text-black flex items-center justify-center text-[10px] font-bold shadow-lg">
-                        OK
-                      </div>
+                      <div className="h-6 w-6 rounded-full bg-white shadow-inner shadow-black/20"></div>
                     ) : (
                       <div className="h-6 w-6 rounded-full border-2 border-white/20 hover:border-white/50 transition-colors"></div>
                     )}
@@ -288,7 +284,7 @@ export default function Settings(): React.JSX.Element {
               />
             </button>
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 gap-4">
             <div>
               <div className="text-sm font-semibold text-zinc-200">Low-end device mode</div>
               <div className="text-xs text-zinc-400">

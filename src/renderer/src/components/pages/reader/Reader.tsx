@@ -251,9 +251,9 @@ export default function Reader(): React.JSX.Element {
       >
         <button
           onClick={isPlaying ? (isPaused ? play : pause) : play}
-          className={`rounded-full flex items-center justify-center shadow-lg transition active:scale-95 ${playerTheme.button} ${
-            isCompactHeight ? 'w-10 h-10' : 'w-12 h-12'
-          }`}
+          className={`rounded-full flex items-center justify-center shadow-lg transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
+            playerTheme.button
+          } ${isCompactHeight ? 'w-10 h-10' : 'w-12 h-12'}`}
           aria-label={isPlaying && !isPaused ? 'Pause playback' : 'Start playback'}
           aria-pressed={isPlaying && !isPaused}
         >
@@ -297,21 +297,21 @@ export default function Reader(): React.JSX.Element {
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={handleJumpToHighlight}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center ${playerTheme.iconButton}`}
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
             aria-label="Jump to current highlighted passage"
           >
             <FiCrosshair className="text-sm" />
           </button>
           <button
             onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center ${playerTheme.iconButton}`}
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
             aria-label="Open appearance settings"
           >
             <FiSliders className="text-sm" />
           </button>
           <button
             onClick={() => setIsTocOpen(!isTocOpen)}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center ${playerTheme.iconButton}`}
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
             aria-label="Toggle table of contents"
           >
             <FiList className="text-sm" />
@@ -319,7 +319,7 @@ export default function Reader(): React.JSX.Element {
           <button
             onClick={handlePrevPage}
             disabled={visualPageIndex === 0}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 ${playerTheme.iconButton}`}
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
             aria-label="Previous page"
           >
             <FiChevronLeft className="text-sm" />
@@ -327,14 +327,14 @@ export default function Reader(): React.JSX.Element {
           <button
             onClick={handleNextPage}
             disabled={visualPageIndex >= totalPages - 1}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 ${playerTheme.iconButton}`}
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
             aria-label="Next page"
           >
             <FiChevronRight className="text-sm" />
           </button>
           <button
             onClick={stop}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center ${playerTheme.iconButton}`}
+            className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
             aria-label="Stop playback"
           >
             <FiStopCircle className="text-sm" />
