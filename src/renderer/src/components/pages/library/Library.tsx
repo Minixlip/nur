@@ -68,17 +68,24 @@ export default function Library(): React.JSX.Element {
                 </div>
               )}
 
-              <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <span className="bg-white text-black px-4 py-2 rounded-full font-bold text-sm transform scale-90 group-hover:scale-100 transition-transform shadow-lg">
-                  Read
+                  Open Book
                 </span>
               </div>
             </div>
 
-            <h3 className="font-bold text-zinc-200 leading-tight truncate px-1">{book.title}</h3>
-            <p className="text-xs text-zinc-500 mt-1 px-1">
-              {new Date(book.dateAdded).toLocaleDateString()}
-            </p>
+            <div className="px-1 space-y-1">
+              <h3 className="font-semibold text-zinc-200 leading-snug truncate">
+                {book.title}
+              </h3>
+              <div className="text-xs text-zinc-500 flex items-center justify-between">
+                <span>{new Date(book.dateAdded).toLocaleDateString()}</span>
+                {typeof book.lastPageIndex === 'number' && book.lastPageIndex > 0 && (
+                  <span className="text-[11px] text-zinc-400">Resume</span>
+                )}
+              </div>
+            </div>
             {typeof book.lastPageIndex === 'number' &&
               typeof book.totalPages === 'number' &&
               book.totalPages > 0 && (

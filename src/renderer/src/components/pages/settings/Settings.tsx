@@ -119,15 +119,15 @@ export default function Settings(): React.JSX.Element {
 
   return (
     <div className="p-8 text-white h-full overflow-y-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Settings</h1>
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold text-zinc-100">Settings</h1>
         <p className="text-zinc-400 mt-1">Personalize your playback and voice settings.</p>
       </div>
 
       <div className="max-w-3xl space-y-8">
         <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)] space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Audio Engine</h2>
+            <h2 className="text-xl font-semibold text-zinc-100">Audio Engine</h2>
           </div>
 
           <div className="space-y-4">
@@ -140,10 +140,10 @@ export default function Settings(): React.JSX.Element {
             >
               <button
                 onClick={() => handleEngineChange('xtts')}
-                className="w-full px-5 py-4 text-left flex justify-between items-center"
+                className="w-full px-5 py-4 text-left flex justify-between items-center gap-4"
               >
-                <div>
-                  <div className="font-bold text-lg flex items-center gap-2">
+                <div className="space-y-1">
+                  <div className="font-semibold text-lg flex items-center gap-2 text-zinc-100">
                     Coqui XTTS
                     <span className="text-xs bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-white/10">
                       HQ
@@ -219,9 +219,9 @@ export default function Settings(): React.JSX.Element {
                 </div>
               )}
 
-              <div className="px-5 py-4 flex justify-between items-center">
-                <div>
-                  <div className="font-bold text-lg flex items-center gap-2">
+              <div className="px-5 py-4 flex justify-between items-center gap-4">
+                <div className="space-y-1">
+                  <div className="font-semibold text-lg flex items-center gap-2 text-zinc-100">
                     Piper TTS
                     <span className="text-xs bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-white/10">
                       FAST
@@ -265,7 +265,7 @@ export default function Settings(): React.JSX.Element {
         <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)] space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold">Performance</h2>
+              <h2 className="text-xl font-semibold text-zinc-100">Performance</h2>
               <p className="text-sm text-zinc-400 mt-1">
                 Reduce buffering on low-end devices by using smaller audio batches.
               </p>

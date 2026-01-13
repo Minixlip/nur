@@ -13,7 +13,7 @@ type SidebarProps = {
 
 const navClass = (isActive: boolean, collapsed: boolean) =>
   `flex items-center gap-3 rounded-2xl transition-all duration-300 text-sm font-medium ${
-    collapsed ? 'justify-center px-2 py-3' : 'px-4 py-3'
+    collapsed ? 'justify-center px-2 py-3.5' : 'px-4 py-3.5'
   } ${
     isActive
       ? 'bg-white/10 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)]'
@@ -22,9 +22,9 @@ const navClass = (isActive: boolean, collapsed: boolean) =>
 
 const navItems = [
   { path: '/', label: 'My Library', icon: <RiBookShelfLine className="text-lg" /> },
-  { path: '/voice-market', label: 'Voice Market', icon: <TiMicrophoneOutline /> },
-  { path: '/downloads', label: 'Downloads', icon: <PiDownloadSimple /> },
-  { path: '/settings', label: 'Settings', icon: <TbSettings /> }
+  { path: '/voice-market', label: 'Voice Market', icon: <TiMicrophoneOutline className="text-lg" /> },
+  { path: '/downloads', label: 'Downloads', icon: <PiDownloadSimple className="text-lg" /> },
+  { path: '/settings', label: 'Settings', icon: <TbSettings className="text-lg" /> }
 ]
 
 export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps): React.JSX.Element {
@@ -51,7 +51,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps): 
         </div>
         <button
           onClick={onToggleCollapse}
-          className={`rounded-full border border-white/10 bg-white/5 text-zinc-200 transition hover:bg-white/10 flex items-center justify-center ${
+          className={`rounded-full border border-white/10 bg-white/5 text-zinc-200 transition hover:bg-white/10 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
             collapsed ? 'h-7 w-7' : 'h-8 w-8'
           }`}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
