@@ -41,6 +41,7 @@ const AUDIO_CACHE_DB = 'nur-audio-cache'
 const AUDIO_CACHE_STORE = 'audio'
 const AUDIO_CACHE_DISK_LIMIT = 120
 const ENABLE_PREWARM = false
+const FADE_SEC = 0.03
 
 // --- HELPER: Time Estimator ---
 const estimateSentenceDurations = (sentences: string[], totalDuration: number) => {
@@ -220,12 +221,6 @@ export function useAudioPlayer({
 
     const activeSentences = activeIndices.map((idx) => bookStructure.allSentences[idx])
     const getGlobalIndex = (localIndex: number) => activeIndices[localIndex]
-
-    if (startPageIndex === visualPageIndex) {
-      const firstIndices = activeIndices.slice(0, 6)
-      const firstTexts = firstIndices.map((idx) => bookStructure.allSentences[idx])
-      console.log('[TTS] Start page', startPageIndex, 'indices', firstIndices, firstTexts)
-    }
 
     let currentBatchText: string[] = []
     let currentBatchIndices: number[] = []
@@ -549,9 +544,15 @@ export function useAudioPlayer({
 
             const source = ctx.createBufferSource()
             source.buffer = audioBuffer
-            source.connect(ctx.destination)
-
             const start = Math.max(ctx.currentTime, nextStartTimeRef.current)
+            const gainNode = ctx.createGain()
+            gainNode.gain.setValueAtTime(0, start)
+            gainNode.gain.linearRampToValueAtTime(1, start + FADE_SEC)
+            const endTime = start + audioBuffer.duration
+            gainNode.gain.setValueAtTime(1, Math.max(start, endTime - FADE_SEC))
+            gainNode.gain.linearRampToValueAtTime(0, endTime)
+            source.connect(gainNode)
+            gainNode.connect(ctx.destination)
             source.start(start)
             nextStartTimeRef.current = start + audioBuffer.duration
 
