@@ -61,7 +61,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps): 
         </Tooltip>
       </div>
 
-      <nav className="flex flex-col gap-2 mt-4">
+      <nav className="flex flex-col gap-2 mt-4 flex-none">
         {navItems.map((item) => {
           const isActive =
             item.path === '/' ? isLibraryActive : location.pathname.startsWith(item.path)
@@ -116,27 +116,42 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps): 
       </nav>
 
       {!collapsed && (
-        <div className="mt-auto rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.25)]">
-          <h4 className="px-1 text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">
-            Recent Reads
-          </h4>
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-            {library.slice(0, 3).map((book) => (
-              <button
-                key={book.id}
-                onClick={() => navigate(`/read/${book.id}`)}
-                className="w-12 h-16 bg-zinc-800/80 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition flex-shrink-0 border border-white/10 shadow-sm"
-                aria-label={`Open ${book.title}`}
-              >
-                {book.cover ? (
-                  <img src={book.cover} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400">
-                    Book
+        <div className="mt-6 flex-1 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.25)] flex flex-col min-h-0">
+          <div className="flex items-center justify-between px-1 mb-3">
+            <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+              Recent Reads
+            </h4>
+            <span className="text-[10px] text-zinc-500">{library.length} total</span>
+          </div>
+          <div className="flex-1 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-3">
+              {library.slice(0, 8).map((book) => (
+                <button
+                  key={book.id}
+                  onClick={() => navigate(`/read/${book.id}`)}
+                  className="group rounded-xl border border-white/10 bg-white/5 overflow-hidden cursor-pointer transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/10 shadow-sm"
+                  aria-label={`Open ${book.title}`}
+                >
+                  <div className="relative aspect-[2/3]">
+                    {book.cover ? (
+                      <img src={book.cover} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400 bg-zinc-800/60">
+                        Book
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-[10px] uppercase tracking-wide text-white/90">
+                        Open
+                      </span>
+                    </div>
                   </div>
-                )}
-              </button>
-            ))}
+                  <div className="px-2 py-2 text-left">
+                    <div className="text-[11px] text-zinc-200 truncate">{book.title}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -98,8 +98,8 @@ export default function Voice() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)] self-start">
               <h2 className="text-xl font-bold mb-2">Add Voice Sample</h2>
               <p className="text-zinc-400 text-sm mb-6">
                 Upload a 6-10 second WAV file. Name it and reuse it anytime.

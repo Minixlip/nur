@@ -71,10 +71,17 @@ export default function Library(): React.JSX.Element {
                 </div>
               )}
 
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
                 <span className="bg-white text-black px-4 py-2 rounded-full font-bold text-sm transform scale-90 group-hover:scale-100 transition-transform shadow-lg">
                   Open Book
                 </span>
+                <button
+                  onClick={(e) => removeBook(book.id, e)}
+                  className="bg-white/10 text-white border border-white/20 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-500/80 hover:border-red-400 transition"
+                  aria-label={`Remove ${book.title}`}
+                >
+                  Remove
+                </button>
               </div>
             </div>
 
@@ -115,15 +122,6 @@ export default function Library(): React.JSX.Element {
                 </div>
               )}
 
-            <Tooltip label={`Remove ${book.title}`}>
-              <button
-                onClick={(e) => removeBook(book.id, e)}
-                className="absolute top-2 right-2 bg-black/60 hover:bg-red-500 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all z-10 backdrop-blur-sm"
-                aria-label={`Remove ${book.title}`}
-              >
-                X
-              </button>
-            </Tooltip>
           </div>
         ))}
 

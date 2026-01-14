@@ -259,49 +259,64 @@ export default function Settings(): React.JSX.Element {
                 </div>
               )}
 
-              <div className="px-5 py-4 flex justify-between items-center gap-4">
-                <div className="space-y-1">
-                  <div className="font-semibold text-lg flex items-center gap-2 text-zinc-100">
-                    Piper TTS
-                    <span className="text-xs bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-white/10">
-                      FAST
-                    </span>
+              {piperStatus === 'ready' ? (
+                <Tooltip label="Select Piper TTS" className="w-full">
+                  <button
+                    onClick={() => handleEngineChange('piper')}
+                    className="w-full px-5 py-4 flex justify-between items-center gap-4 text-left"
+                  >
+                    <div className="space-y-1">
+                      <div className="font-semibold text-lg flex items-center gap-2 text-zinc-100">
+                        Piper TTS
+                        <span className="text-xs bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-white/10">
+                          FAST
+                        </span>
+                      </div>
+                      <div className="text-sm text-zinc-300 mt-1">
+                        Ultra-fast generation. Works on any CPU.
+                      </div>
+                    </div>
+                    {engine === 'piper' ? (
+                      <div className="h-6 w-6 rounded-full bg-white shadow-inner shadow-black/20"></div>
+                    ) : (
+                      <div className="h-6 w-6 rounded-full border-2 border-white/20 hover:border-white/50 transition-colors"></div>
+                    )}
+                  </button>
+                </Tooltip>
+              ) : (
+                <div className="px-5 py-4 flex justify-between items-center gap-4">
+                  <div className="space-y-1">
+                    <div className="font-semibold text-lg flex items-center gap-2 text-zinc-100">
+                      Piper TTS
+                      <span className="text-xs bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-white/10">
+                        FAST
+                      </span>
+                    </div>
+                    <div className="text-sm text-zinc-300 mt-1">
+                      Ultra-fast generation. Works on any CPU.
+                    </div>
                   </div>
-                  <div className="text-sm text-zinc-300 mt-1">
-                    Ultra-fast generation. Works on any CPU.
-                  </div>
-                </div>
 
-                {piperStatus === 'ready' ? (
-                  <Tooltip label="Select Piper TTS" className="w-full">
-                    <button
-                      onClick={() => handleEngineChange('piper')}
-                      className="h-full absolute inset-0 w-full flex justify-end items-center px-5 focus:outline-none"
-                    >
-                      {engine === 'piper' ? (
-                        <div className="h-6 w-6 rounded-full bg-white shadow-inner shadow-black/20"></div>
-                      ) : (
-                        <div className="h-6 w-6 rounded-full border-2 border-white/20 hover:border-white/50 transition-colors"></div>
-                      )}
-                    </button>
-                  </Tooltip>
-                ) : piperStatus === 'downloading' ? (
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-zinc-200 font-mono">{Math.round(progress)}%</span>
-                    <div className="animate-spin h-5 w-5 border-2 border-white/70 border-t-transparent rounded-full"></div>
-                  </div>
-                ) : (
-                  <Tooltip label="Download Piper model">
-                    <button
-                      onClick={handleDownload}
-                      className="z-10 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95 flex items-center gap-2"
-                    >
-                      <span>Download Model</span>
-                      <span className="bg-black/10 px-1.5 rounded text-xs">~60MB</span>
-                    </button>
-                  </Tooltip>
-                )}
-              </div>
+                  {piperStatus === 'downloading' ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-zinc-200 font-mono">
+                        {Math.round(progress)}%
+                      </span>
+                      <div className="animate-spin h-5 w-5 border-2 border-white/70 border-t-transparent rounded-full"></div>
+                    </div>
+                  ) : (
+                    <Tooltip label="Download Piper model">
+                      <button
+                        onClick={handleDownload}
+                        className="z-10 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95 flex items-center gap-2"
+                      >
+                        <span>Download Model</span>
+                        <span className="bg-black/10 px-1.5 rounded text-xs">~60MB</span>
+                      </button>
+                    </Tooltip>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
