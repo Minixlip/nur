@@ -17,6 +17,7 @@ import { useReaderSettings } from '../../../hooks/useReaderSettings'
 import AppearanceMenu from '../../AppearanceMenu'
 import { BookViewer } from '../../bookViewer'
 import { TableOfContents } from '../../TableOfContents'
+import Tooltip from '../../ui/Tooltip'
 
 export default function Reader(): React.JSX.Element {
   const { bookId } = useParams()
@@ -263,20 +264,22 @@ export default function Reader(): React.JSX.Element {
             : 'rounded-full pl-4 pr-6 py-3 flex items-center gap-4'
         }`}
       >
-        <button
-          onClick={isPlaying ? (isPaused ? play : pause) : play}
-          className={`rounded-full flex items-center justify-center shadow-lg transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
-            playerTheme.button
-          } ${isCompactHeight ? 'w-10 h-10' : 'w-12 h-12'}`}
-          aria-label={isPlaying && !isPaused ? 'Pause playback' : 'Start playback'}
-          aria-pressed={isPlaying && !isPaused}
-        >
-          {isPlaying && !isPaused ? (
-            <FiPause className={isCompactHeight ? 'text-base' : 'text-xl'} />
-          ) : (
-            <FiPlay className={isCompactHeight ? 'text-base' : 'text-xl'} />
-          )}
-        </button>
+        <Tooltip label={isPlaying && !isPaused ? 'Pause playback' : 'Start playback'}>
+          <button
+            onClick={isPlaying ? (isPaused ? play : pause) : play}
+            className={`rounded-full flex items-center justify-center shadow-lg transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
+              playerTheme.button
+            } ${isCompactHeight ? 'w-10 h-10' : 'w-12 h-12'}`}
+            aria-label={isPlaying && !isPaused ? 'Pause playback' : 'Start playback'}
+            aria-pressed={isPlaying && !isPaused}
+          >
+            {isPlaying && !isPaused ? (
+              <FiPause className={isCompactHeight ? 'text-base' : 'text-xl'} />
+            ) : (
+              <FiPlay className={isCompactHeight ? 'text-base' : 'text-xl'} />
+            )}
+          </button>
+        </Tooltip>
 
         <div
           className={`flex flex-col gap-1 flex-1 min-w-[120px] ${
@@ -309,50 +312,62 @@ export default function Reader(): React.JSX.Element {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={handleJumpToHighlight}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
-            aria-label="Jump to current highlighted passage"
-          >
-            <FiCrosshair className="text-sm" />
-          </button>
-          <button
-            onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
-            aria-label="Open appearance settings"
-          >
-            <FiSliders className="text-sm" />
-          </button>
-          <button
-            onClick={() => setIsTocOpen(!isTocOpen)}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
-            aria-label="Toggle table of contents"
-          >
-            <FiList className="text-sm" />
-          </button>
-          <button
-            onClick={handlePrevPage}
-            disabled={visualPageIndex === 0}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
-            aria-label="Previous page"
-          >
-            <FiChevronLeft className="text-sm" />
-          </button>
-          <button
-            onClick={handleNextPage}
-            disabled={visualPageIndex >= totalPages - 1}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
-            aria-label="Next page"
-          >
-            <FiChevronRight className="text-sm" />
-          </button>
-          <button
-            onClick={stop}
-            className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
-            aria-label="Stop playback"
-          >
-            <FiStopCircle className="text-sm" />
-          </button>
+          <Tooltip label="Jump to current highlighted passage">
+            <button
+              onClick={handleJumpToHighlight}
+              className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
+              aria-label="Jump to current highlighted passage"
+            >
+              <FiCrosshair className="text-sm" />
+            </button>
+          </Tooltip>
+          <Tooltip label="Appearance settings">
+            <button
+              onClick={() => setIsAppearanceOpen(!isAppearanceOpen)}
+              className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
+              aria-label="Open appearance settings"
+            >
+              <FiSliders className="text-sm" />
+            </button>
+          </Tooltip>
+          <Tooltip label="Table of contents">
+            <button
+              onClick={() => setIsTocOpen(!isTocOpen)}
+              className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
+              aria-label="Toggle table of contents"
+            >
+              <FiList className="text-sm" />
+            </button>
+          </Tooltip>
+          <Tooltip label="Previous page">
+            <button
+              onClick={handlePrevPage}
+              disabled={visualPageIndex === 0}
+              className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
+              aria-label="Previous page"
+            >
+              <FiChevronLeft className="text-sm" />
+            </button>
+          </Tooltip>
+          <Tooltip label="Next page">
+            <button
+              onClick={handleNextPage}
+              disabled={visualPageIndex >= totalPages - 1}
+              className={`h-9 w-9 rounded-full border transition flex items-center justify-center disabled:opacity-40 hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
+              aria-label="Next page"
+            >
+              <FiChevronRight className="text-sm" />
+            </button>
+          </Tooltip>
+          <Tooltip label="Stop playback">
+            <button
+              onClick={stop}
+              className={`h-9 w-9 rounded-full border transition flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 ${playerTheme.iconButton}`}
+              aria-label="Stop playback"
+            >
+              <FiStopCircle className="text-sm" />
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>

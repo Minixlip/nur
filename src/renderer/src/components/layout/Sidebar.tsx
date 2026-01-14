@@ -5,6 +5,7 @@ import { TbSettings } from 'react-icons/tb'
 import { PiDownloadSimple } from 'react-icons/pi'
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 import { useLibrary } from '../../hooks/useLibrary'
+import Tooltip from '../ui/Tooltip'
 
 type SidebarProps = {
   collapsed: boolean
@@ -12,7 +13,7 @@ type SidebarProps = {
 }
 
 const navClass = (isActive: boolean, collapsed: boolean) =>
-  `flex items-center gap-3 rounded-2xl transition-all duration-300 text-sm font-medium ${
+  `w-full flex items-center gap-3 rounded-2xl transition-all duration-300 text-sm font-medium ${
     collapsed ? 'justify-center px-2 py-3.5' : 'px-4 py-3.5'
   } ${
     isActive
@@ -49,15 +50,17 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps): 
         >
           Nur
         </div>
-        <button
-          onClick={onToggleCollapse}
-          className={`rounded-full border border-white/10 bg-white/5 text-zinc-200 transition hover:bg-white/10 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
-            collapsed ? 'h-7 w-7' : 'h-8 w-8'
-          }`}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <FiChevronRight /> : <FiChevronLeft />}
-        </button>
+          <Tooltip label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <button
+              onClick={onToggleCollapse}
+              className={`rounded-full border border-white/10 bg-white/5 text-zinc-200 transition hover:bg-white/10 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
+                collapsed ? 'h-7 w-7' : 'h-8 w-8'
+            }`}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <FiChevronRight /> : <FiChevronLeft />}
+          </button>
+        </Tooltip>
       </div>
 
       <nav className="flex flex-col gap-2 mt-4">
@@ -84,30 +87,32 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps): 
 
           if (item.path === '/') {
             return (
-              <button
-                key={item.path}
-                onClick={() => navigate('/')}
-                className={navClass(isActive, collapsed)}
+              <Tooltip key={item.path} label={item.label} className="w-full">
+                <button
+                  onClick={() => navigate('/')}
+                  className={navClass(isActive, collapsed)}
+                  aria-label={item.label}
+                  style={{ transitionDelay: revealDelay }}
+                >
+                  {content}
+                  {collapsed && <span className="sr-only">{item.label}</span>}
+                </button>
+              </Tooltip>
+            )
+          }
+
+          return (
+            <Tooltip key={item.path} label={item.label} className="w-full">
+              <NavLink
+                to={item.path}
+                className={() => navClass(isActive, collapsed)}
                 aria-label={item.label}
                 style={{ transitionDelay: revealDelay }}
               >
                 {content}
                 {collapsed && <span className="sr-only">{item.label}</span>}
-              </button>
-            )
-          }
-
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={() => navClass(isActive, collapsed)}
-              aria-label={item.label}
-              style={{ transitionDelay: revealDelay }}
-            >
-              {content}
-              {collapsed && <span className="sr-only">{item.label}</span>}
-            </NavLink>
+              </NavLink>
+            </Tooltip>
           )
         })}
       </nav>

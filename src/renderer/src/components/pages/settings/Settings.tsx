@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useReaderSettings } from '../../../hooks/useReaderSettings'
+import Tooltip from '../../ui/Tooltip'
 
 export default function Settings(): React.JSX.Element {
   const { settings } = useReaderSettings()
@@ -164,28 +165,30 @@ export default function Settings(): React.JSX.Element {
                   : 'bg-white/5 border-white/10'
               }`}
             >
-              <button
-                onClick={() => handleEngineChange('xtts')}
-                className="w-full px-5 py-4 text-left flex justify-between items-center gap-4"
-              >
-                <div className="space-y-1">
-                  <div className="font-semibold text-lg flex items-center gap-2 text-zinc-100">
-                    Coqui XTTS
-                    <span className="text-xs bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-white/10">
-                      HQ
-                    </span>
+              <Tooltip label="Select Coqui XTTS" className="w-full">
+                <button
+                  onClick={() => handleEngineChange('xtts')}
+                  className="w-full px-5 py-4 text-left flex justify-between items-center gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="font-semibold text-lg flex items-center gap-2 text-zinc-100">
+                      Coqui XTTS
+                      <span className="text-xs bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded border border-white/10">
+                        HQ
+                      </span>
+                    </div>
+                    <div className="text-sm text-zinc-300 mt-1">
+                      Realistic, emotive voices. Supports cloning.
+                      <span className="ml-2 text-yellow-500 text-xs font-mono">Requires GPU</span>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-300 mt-1">
-                    Realistic, emotive voices. Supports cloning.
-                    <span className="ml-2 text-yellow-500 text-xs font-mono">Requires GPU</span>
-                  </div>
-                </div>
-                {engine === 'xtts' ? (
-                  <div className="h-6 w-6 rounded-full bg-white shadow-inner shadow-black/20"></div>
-                ) : (
-                  <div className="h-6 w-6 rounded-full border-2 border-white/20"></div>
-                )}
-              </button>
+                  {engine === 'xtts' ? (
+                    <div className="h-6 w-6 rounded-full bg-white shadow-inner shadow-black/20"></div>
+                  ) : (
+                    <div className="h-6 w-6 rounded-full border-2 border-white/20"></div>
+                  )}
+                </button>
+              </Tooltip>
 
               {engine === 'xtts' && (
                 <div className="px-5 pb-5 pt-2 border-t border-white/10 bg-black/20">
@@ -200,30 +203,36 @@ export default function Settings(): React.JSX.Element {
                           <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs text-zinc-300">
                             WAV
                           </div>
-                          <div className="truncate text-sm text-gray-200" title={customVoicePath}>
-                            ...{customVoicePath.slice(-40)}
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleResetVoice}
-                          className="text-xs text-red-400 hover:text-red-300 px-2 font-semibold"
-                        >
-                          Remove
-                        </button>
+                      <div className="truncate text-sm text-zinc-200" title={customVoicePath}>
+                        ...{customVoicePath.slice(-40)}
+                      </div>
+                    </div>
+                        <Tooltip label="Remove custom voice">
+                          <button
+                            onClick={handleResetVoice}
+                            className="text-xs text-red-400 hover:text-red-300 px-2 font-semibold"
+                          >
+                            Remove
+                          </button>
+                        </Tooltip>
                       </div>
                     ) : (
-                      <div className="flex-1 text-xs text-gray-400 italic bg-black/20 p-3 rounded-lg border border-dashed border-white/10">
+                      <div className="flex-1 text-xs text-zinc-400 italic bg-black/20 p-3 rounded-lg border border-dashed border-white/10">
                         Using Default Female Voice. Upload a short WAV file (6-10s) to clone a
                         voice.
                       </div>
                     )}
 
-                    <button
-                      onClick={handleVoiceSelect}
-                      className="px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-bold shadow transition hover:-translate-y-0.5"
+                    <Tooltip
+                      label={customVoicePath ? 'Change voice reference' : 'Select voice reference'}
                     >
-                      {customVoicePath ? 'Change Voice' : 'Select File'}
-                    </button>
+                      <button
+                        onClick={handleVoiceSelect}
+                        className="px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-bold shadow transition hover:-translate-y-0.5"
+                      >
+                        {customVoicePath ? 'Change Voice' : 'Select File'}
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               )}
@@ -253,35 +262,39 @@ export default function Settings(): React.JSX.Element {
                       FAST
                     </span>
                   </div>
-                  <div className="text-sm text-gray-300 mt-1">
+                  <div className="text-sm text-zinc-300 mt-1">
                     Ultra-fast generation. Works on any CPU.
                   </div>
                 </div>
 
                 {piperStatus === 'ready' ? (
-                  <button
-                    onClick={() => handleEngineChange('piper')}
-                    className="h-full absolute inset-0 w-full flex justify-end items-center px-5 focus:outline-none"
-                  >
-                    {engine === 'piper' ? (
-                      <div className="h-6 w-6 rounded-full bg-white shadow-inner shadow-black/20"></div>
-                    ) : (
-                      <div className="h-6 w-6 rounded-full border-2 border-white/20 hover:border-white/50 transition-colors"></div>
-                    )}
-                  </button>
+                  <Tooltip label="Select Piper TTS" className="w-full">
+                    <button
+                      onClick={() => handleEngineChange('piper')}
+                      className="h-full absolute inset-0 w-full flex justify-end items-center px-5 focus:outline-none"
+                    >
+                      {engine === 'piper' ? (
+                        <div className="h-6 w-6 rounded-full bg-white shadow-inner shadow-black/20"></div>
+                      ) : (
+                        <div className="h-6 w-6 rounded-full border-2 border-white/20 hover:border-white/50 transition-colors"></div>
+                      )}
+                    </button>
+                  </Tooltip>
                 ) : piperStatus === 'downloading' ? (
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-zinc-200 font-mono">{Math.round(progress)}%</span>
                     <div className="animate-spin h-5 w-5 border-2 border-white/70 border-t-transparent rounded-full"></div>
                   </div>
                 ) : (
-                  <button
-                    onClick={handleDownload}
-                    className="z-10 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95 flex items-center gap-2"
-                  >
-                    <span>Download Model</span>
-                    <span className="bg-black/10 px-1.5 rounded text-xs">~60MB</span>
-                  </button>
+                  <Tooltip label="Download Piper model">
+                    <button
+                      onClick={handleDownload}
+                      className="z-10 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95 flex items-center gap-2"
+                    >
+                      <span>Download Model</span>
+                      <span className="bg-black/10 px-1.5 rounded text-xs">~60MB</span>
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             </div>
@@ -296,19 +309,21 @@ export default function Settings(): React.JSX.Element {
                 Reduce buffering on low-end devices by using smaller audio batches.
               </p>
             </div>
-            <button
-              onClick={handleLowEndToggle}
-              className={`relative inline-flex h-7 w-14 items-center rounded-full border transition-all ${
-                lowEndMode ? 'bg-white/90 border-white/80' : 'bg-white/10 border-white/20'
-              }`}
-              aria-pressed={lowEndMode}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-black transition-all ${
-                  lowEndMode ? 'translate-x-7' : 'translate-x-1'
+            <Tooltip label="Toggle low-end device mode">
+              <button
+                onClick={handleLowEndToggle}
+                className={`relative inline-flex h-7 w-14 items-center rounded-full border transition-all ${
+                  lowEndMode ? 'bg-white/90 border-white/80' : 'bg-white/10 border-white/20'
                 }`}
-              />
-            </button>
+                aria-pressed={lowEndMode}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-black transition-all ${
+                    lowEndMode ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </Tooltip>
           </div>
           <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3 gap-4">
             <div>
@@ -336,23 +351,25 @@ export default function Settings(): React.JSX.Element {
               <div className="text-[11px] text-zinc-400 mt-1">
                 How many segments load before playback starts.
               </div>
-              <input
-                type="range"
-                min={1}
-                max={6}
-                step={1}
-                value={initialBuffer}
-                onChange={(event) => handleInitialBufferChange(Number(event.target.value))}
-                className="mt-3 w-full glass-slider"
-                style={
-                  {
-                    '--slider-fill': getSliderFill(),
-                    '--slider-percent': getSliderPercent(initialBuffer, 1, 6),
-                    '--slider-thumb-border': getSliderThumbBorder(),
-                    '--slider-glow': getSliderGlow()
-                  } as React.CSSProperties
-                }
-              />
+              <Tooltip label="Initial buffer size" className="w-full">
+                <input
+                  type="range"
+                  min={1}
+                  max={6}
+                  step={1}
+                  value={initialBuffer}
+                  onChange={(event) => handleInitialBufferChange(Number(event.target.value))}
+                  className="mt-3 w-full glass-slider"
+                  style={
+                    {
+                      '--slider-fill': getSliderFill(),
+                      '--slider-percent': getSliderPercent(initialBuffer, 1, 6),
+                      '--slider-thumb-border': getSliderThumbBorder(),
+                      '--slider-glow': getSliderGlow()
+                    } as React.CSSProperties
+                  }
+                />
+              </Tooltip>
             </div>
             <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
               <div className="flex items-center justify-between text-sm text-zinc-200">
@@ -362,23 +379,25 @@ export default function Settings(): React.JSX.Element {
               <div className="text-[11px] text-zinc-400 mt-1">
                 Keeps playback smooth once it is running.
               </div>
-              <input
-                type="range"
-                min={3}
-                max={14}
-                step={1}
-                value={steadyBuffer}
-                onChange={(event) => handleSteadyBufferChange(Number(event.target.value))}
-                className="mt-3 w-full glass-slider"
-                style={
-                  {
-                    '--slider-fill': getSliderFill(),
-                    '--slider-percent': getSliderPercent(steadyBuffer, 3, 14),
-                    '--slider-thumb-border': getSliderThumbBorder(),
-                    '--slider-glow': getSliderGlow()
-                  } as React.CSSProperties
-                }
-              />
+              <Tooltip label="Steady buffer size" className="w-full">
+                <input
+                  type="range"
+                  min={3}
+                  max={14}
+                  step={1}
+                  value={steadyBuffer}
+                  onChange={(event) => handleSteadyBufferChange(Number(event.target.value))}
+                  className="mt-3 w-full glass-slider"
+                  style={
+                    {
+                      '--slider-fill': getSliderFill(),
+                      '--slider-percent': getSliderPercent(steadyBuffer, 3, 14),
+                      '--slider-thumb-border': getSliderThumbBorder(),
+                      '--slider-glow': getSliderGlow()
+                    } as React.CSSProperties
+                  }
+                />
+              </Tooltip>
             </div>
             <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
               <div className="flex items-center justify-between text-sm text-zinc-200">
@@ -388,23 +407,25 @@ export default function Settings(): React.JSX.Element {
               <div className="text-[11px] text-zinc-400 mt-1">
                 Blends adjacent segments to reduce gaps.
               </div>
-              <input
-                type="range"
-                min={0}
-                max={120}
-                step={5}
-                value={crossfadeMs}
-                onChange={(event) => handleCrossfadeChange(Number(event.target.value))}
-                className="mt-3 w-full glass-slider"
-                style={
-                  {
-                    '--slider-fill': getSliderFill(),
-                    '--slider-percent': getSliderPercent(crossfadeMs, 0, 120),
-                    '--slider-thumb-border': getSliderThumbBorder(),
-                    '--slider-glow': getSliderGlow()
-                  } as React.CSSProperties
-                }
-              />
+              <Tooltip label="Crossfade duration" className="w-full">
+                <input
+                  type="range"
+                  min={0}
+                  max={120}
+                  step={5}
+                  value={crossfadeMs}
+                  onChange={(event) => handleCrossfadeChange(Number(event.target.value))}
+                  className="mt-3 w-full glass-slider"
+                  style={
+                    {
+                      '--slider-fill': getSliderFill(),
+                      '--slider-percent': getSliderPercent(crossfadeMs, 0, 120),
+                      '--slider-thumb-border': getSliderThumbBorder(),
+                      '--slider-glow': getSliderGlow()
+                    } as React.CSSProperties
+                  }
+                />
+              </Tooltip>
             </div>
           </div>
         </div>

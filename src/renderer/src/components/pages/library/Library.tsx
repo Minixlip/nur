@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useBookImporter } from '../../../hooks/useBookImporter'
 import { useLibrary, SavedBook } from '../../../hooks/useLibrary'
+import Tooltip from '../../ui/Tooltip'
 
 export default function Library(): React.JSX.Element {
   const navigate = useNavigate()
@@ -28,12 +29,14 @@ export default function Library(): React.JSX.Element {
           <h1 className="text-4xl font-bold text-white tracking-tight mb-2">My Library</h1>
           <p className="text-zinc-400">Continue your reading journey.</p>
         </div>
-        <button
-          onClick={handleImportNew}
-          className="px-5 py-2.5 bg-white/90 text-black hover:bg-white rounded-full font-bold shadow-[0_12px_30px_rgba(0,0,0,0.35)] transition-transform active:scale-95 flex items-center gap-2"
-        >
-          <span>+</span> Add Book
-        </button>
+        <Tooltip label="Import a new book">
+          <button
+            onClick={handleImportNew}
+            className="px-5 py-2.5 bg-white/90 text-black hover:bg-white rounded-full font-bold shadow-[0_12px_30px_rgba(0,0,0,0.35)] transition-transform active:scale-95 flex items-center gap-2"
+          >
+            <span>+</span> Add Book
+          </button>
+        </Tooltip>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
@@ -112,13 +115,15 @@ export default function Library(): React.JSX.Element {
                 </div>
               )}
 
-            <button
-              onClick={(e) => removeBook(book.id, e)}
-              className="absolute top-2 right-2 bg-black/60 hover:bg-red-500 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all z-10 backdrop-blur-sm"
-              aria-label={`Remove ${book.title}`}
-            >
-              X
-            </button>
+            <Tooltip label={`Remove ${book.title}`}>
+              <button
+                onClick={(e) => removeBook(book.id, e)}
+                className="absolute top-2 right-2 bg-black/60 hover:bg-red-500 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-all z-10 backdrop-blur-sm"
+                aria-label={`Remove ${book.title}`}
+              >
+                X
+              </button>
+            </Tooltip>
           </div>
         ))}
 
