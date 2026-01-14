@@ -151,7 +151,7 @@ export default function Settings(): React.JSX.Element {
         <p className="text-zinc-400 mt-1">Personalize your playback and voice settings.</p>
       </div>
 
-      <div className="max-w-3xl space-y-8">
+      <div className="w-full max-w-none space-y-8">
         <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)] space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold text-zinc-100">Audio Engine</h2>
