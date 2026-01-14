@@ -29,6 +29,11 @@ const api = {
   stop: () => ipcRenderer.invoke('audio:stop'),
   openFileDialog: () => ipcRenderer.invoke('dialog:openFile'),
   readFile: (filepath: string) => ipcRenderer.invoke('fs:readFile', { filepath }),
+  revealPath: (filepath: string) => ipcRenderer.invoke('fs:revealPath', { filepath }),
+  listVoices: () => ipcRenderer.invoke('voice:list'),
+  addVoice: (filePath: string, name: string) =>
+    ipcRenderer.invoke('voice:add', { filePath, name }),
+  removeVoice: (id: string) => ipcRenderer.invoke('voice:remove', { id }),
   saveBook: (path: string, title: string, cover: string | null) =>
     ipcRenderer.invoke('save-book', path, title, cover),
   getLibrary: () => ipcRenderer.invoke('get-library'),

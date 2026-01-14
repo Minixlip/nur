@@ -120,6 +120,11 @@ export default function Settings(): React.JSX.Element {
     localStorage.setItem('audio_crossfade_ms', String(value))
   }
 
+  const handleRevealPiperPath = async () => {
+    if (!piperPath) return
+    await window.api.revealPath(piperPath)
+  }
+
   const getSliderFill = () => {
     if (settings.theme === 'light') return '#1f2937'
     if (settings.theme === 'sepia') return '#6b4f2a'
@@ -426,6 +431,43 @@ export default function Settings(): React.JSX.Element {
                   }
                 />
               </Tooltip>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.35)] space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-zinc-100">Model Storage</h2>
+              <p className="text-sm text-zinc-400 mt-1">
+                Where models are stored on disk. Useful for backups and cleanup.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+            <div className="text-sm font-semibold text-zinc-200">Piper model path</div>
+            <div className="text-xs text-zinc-400 mt-1 break-all">
+              {piperPath ? piperPath : 'Not downloaded yet.'}
+            </div>
+            <div className="mt-3">
+              <Tooltip label={piperPath ? 'Reveal in File Explorer' : 'Download Piper to enable'}>
+                <button
+                  onClick={handleRevealPiperPath}
+                  disabled={!piperPath}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-white/5 transition"
+                >
+                  Reveal in Explorer
+                </button>
+              </Tooltip>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+            <div className="text-sm font-semibold text-zinc-200">XTTS cache location</div>
+            <div className="text-xs text-zinc-400 mt-1">
+              Stored by the TTS engine in the user cache directory. Typical path:
+            </div>
+            <div className="text-xs text-zinc-500 mt-1 break-all">
+              Windows: %USERPROFILE%\\.cache\\tts · macOS/Linux: ~/.cache/tts
             </div>
           </div>
         </div>

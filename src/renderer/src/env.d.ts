@@ -19,6 +19,10 @@ interface ICustomAPI {
   stop: () => Promise<void>
   openFileDialog: () => Promise<string | null>
   readFile: (filepath: string) => Promise<ArrayBuffer>
+  revealPath: (filepath: string) => Promise<boolean>
+  listVoices: () => Promise<any[]>
+  addVoice: (filePath: string, name: string) => Promise<{ success: boolean; voice?: any }>
+  removeVoice: (id: string) => Promise<boolean>
   saveBook: (path: string, title: string, cover: string | null) => Promise<any>
   getLibrary: () => Promise<any[]>
   deleteBook: (id: string) => Promise<boolean>

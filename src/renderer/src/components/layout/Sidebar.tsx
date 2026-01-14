@@ -2,7 +2,6 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { RiBookShelfLine } from 'react-icons/ri'
 import { TiMicrophoneOutline } from 'react-icons/ti'
 import { TbSettings } from 'react-icons/tb'
-import { PiDownloadSimple } from 'react-icons/pi'
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 import { useLibrary } from '../../hooks/useLibrary'
 import Tooltip from '../ui/Tooltip'
@@ -24,7 +23,6 @@ const navClass = (isActive: boolean, collapsed: boolean) =>
 const navItems = [
   { path: '/', label: 'My Library', icon: <RiBookShelfLine className="text-lg" /> },
   { path: '/voice-market', label: 'Voice Market', icon: <TiMicrophoneOutline className="text-lg" /> },
-  { path: '/downloads', label: 'Downloads', icon: <PiDownloadSimple className="text-lg" /> },
   { path: '/settings', label: 'Settings', icon: <TbSettings className="text-lg" /> }
 ]
 

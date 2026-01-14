@@ -13,6 +13,8 @@ let currentPlayer: ChildProcess | null = null
 
 // --- CONSTANTS FOR MODEL MANAGEMENT ---
 const MODELS_DIR = path.join(app.getPath('userData'), 'models')
+const VOICES_DIR = path.join(app.getPath('userData'), 'voices')
+const VOICES_DB = path.join(VOICES_DIR, 'voices.json')
 const PIPER_FILENAME = 'en_US-lessac-medium.onnx'
 const PIPER_JSON = 'en_US-lessac-medium.onnx.json'
 
@@ -25,6 +27,22 @@ const PIPER_URL_JSON =
 // Ensure directory exists
 if (!fs.existsSync(MODELS_DIR)) {
   fs.mkdirSync(MODELS_DIR, { recursive: true })
+}
+if (!fs.existsSync(VOICES_DIR)) {
+  fs.mkdirSync(VOICES_DIR, { recursive: true })
+}
+
+const readVoicesDb = () => {
+  if (!fs.existsSync(VOICES_DB)) return []
+  try {
+    return JSON.parse(fs.readFileSync(VOICES_DB, 'utf-8'))
+  } catch {
+    return []
+  }
+}
+
+const writeVoicesDb = (data: any[]) => {
+  fs.writeFileSync(VOICES_DB, JSON.stringify(data, null, 2))
 }
 
 function createWindow(): void {
@@ -303,6 +321,66 @@ ipcMain.handle('audio:load', async (_event, { filepath }) => {
 // 5. READ FILE
 ipcMain.handle('fs:readFile', async (_event, { filepath }) => {
   return fs.readFileSync(filepath)
+})
+
+// 6. REVEAL PATH IN FILE EXPLORER
+ipcMain.handle('fs:revealPath', async (_event, { filepath }) => {
+  try {
+    if (!filepath) return false
+    shell.showItemInFolder(filepath)
+    return true
+  } catch (err) {
+    console.error('[Main] Reveal path failed:', err)
+    return false
+  }
+})
+
+// 7. VOICE LIBRARY
+ipcMain.handle('voice:list', async () => {
+  return readVoicesDb()
+})
+
+ipcMain.handle('voice:add', async (_event, { filePath, name }) => {
+  try {
+    if (!filePath || !name) return { success: false }
+    const voices = readVoicesDb()
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const ext = path.extname(filePath) || '.wav'
+    const safeName = String(name).trim().replace(/[^\w\- ]+/g, '').slice(0, 60) || 'Voice'
+    const filename = `${id}-${safeName.replace(/\s+/g, '_')}${ext}`
+    const destination = path.join(VOICES_DIR, filename)
+    await fs.promises.copyFile(filePath, destination)
+    const voice = {
+      id,
+      name: safeName,
+      path: destination,
+      createdAt: new Date().toISOString()
+    }
+    voices.unshift(voice)
+    writeVoicesDb(voices)
+    return { success: true, voice }
+  } catch (err) {
+    console.error('[Main] Voice add failed:', err)
+    return { success: false }
+  }
+})
+
+ipcMain.handle('voice:remove', async (_event, { id }) => {
+  try {
+    const voices = readVoicesDb()
+    const index = voices.findIndex((v: any) => v.id === id)
+    if (index === -1) return false
+    const voice = voices[index]
+    try {
+      await fs.promises.unlink(voice.path)
+    } catch (err) {}
+    voices.splice(index, 1)
+    writeVoicesDb(voices)
+    return true
+  } catch (err) {
+    console.error('[Main] Voice remove failed:', err)
+    return false
+  }
 })
 
 app.whenReady().then(() => {
