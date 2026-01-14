@@ -34,6 +34,7 @@ export function useLibrary() {
   const addToLibrary = async (filePath: string, title: string, cover: string | null) => {
     const result = await window.api.saveBook(filePath, title, cover)
     await refreshLibrary()
+    window.dispatchEvent(new Event('library:updated'))
     return result?.book ?? null
   }
 
@@ -42,6 +43,7 @@ export function useLibrary() {
     if (confirm('Are you sure you want to delete this book?')) {
       await window.api.deleteBook(id)
       await refreshLibrary()
+      window.dispatchEvent(new Event('library:updated'))
     }
   }
 
@@ -59,6 +61,14 @@ export function useLibrary() {
   // Load on startup
   useEffect(() => {
     refreshLibrary()
+  }, [])
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      refreshLibrary()
+    }
+    window.addEventListener('library:updated', handleUpdate)
+    return () => window.removeEventListener('library:updated', handleUpdate)
   }, [])
 
   return { library, loadingLibrary, refreshLibrary, addToLibrary, removeBook, updateProgress }
