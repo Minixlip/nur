@@ -35,8 +35,7 @@ export default function Reader(): React.JSX.Element {
 
   const { isPlaying, isPaused, globalSentenceIndex, status, play, pause, stop } = useAudioPlayer({
     bookStructure,
-    visualPageIndex,
-    setVisualPageIndex
+    visualPageIndex
   })
 
   const lastLoadedIdRef = useRef<string | null>(null)
@@ -412,7 +411,6 @@ export default function Reader(): React.JSX.Element {
               bookStructure={bookStructure}
               visualPageIndex={visualPageIndex}
               globalSentenceIndex={globalSentenceIndex}
-              isPlaying={isPlaying}
               onChapterClick={handleChapterClick}
               settings={settings}
             />

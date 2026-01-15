@@ -63,7 +63,6 @@ export default function Settings(): React.JSX.Element {
     setPiperStatus('downloading')
     setProgress(0)
 
-    // @ts-ignore
     const success = await window.api.downloadPiper()
 
     if (success) {
@@ -84,7 +83,6 @@ export default function Settings(): React.JSX.Element {
   }
 
   const handleVoiceSelect = async () => {
-    // @ts-ignore
     const path = await window.api.openAudioFileDialog()
     if (path) {
       setCustomVoicePath(path)
@@ -208,10 +206,10 @@ export default function Settings(): React.JSX.Element {
                           <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs text-zinc-300">
                             WAV
                           </div>
-                      <div className="truncate text-sm text-zinc-200" title={customVoicePath}>
-                        ...{customVoicePath.slice(-40)}
-                      </div>
-                    </div>
+                          <div className="truncate text-sm text-zinc-200" title={customVoicePath}>
+                            ...{customVoicePath.slice(-40)}
+                          </div>
+                        </div>
                         <Tooltip label="Remove custom voice">
                           <button
                             onClick={handleResetVoice}

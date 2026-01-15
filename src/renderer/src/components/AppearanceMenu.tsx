@@ -1,4 +1,3 @@
-import React from 'react'
 import { ReaderSettings } from '../hooks/useReaderSettings'
 
 interface Props {

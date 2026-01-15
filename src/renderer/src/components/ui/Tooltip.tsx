@@ -15,7 +15,7 @@ export default function Tooltip({
 
   return (
     <span className={`tooltip-wrapper${className ? ` ${className}` : ''}`}>
-      {cloneElement(children, {
+      {cloneElement(children as ReactElement<any>, {
         'aria-describedby': id
       })}
       <span id={id} role="tooltip" className="tooltip-content">

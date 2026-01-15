@@ -1,5 +1,4 @@
-import React from 'react'
-import { TocItem } from '../hooks/useBookImporter'
+import { TocItem } from '../types/book'
 
 interface TocProps {
   items: TocItem[]

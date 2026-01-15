@@ -18,8 +18,12 @@ interface ICustomAPI {
   play: (filepath: string) => Promise<void>
   stop: () => Promise<void>
   openFileDialog: () => Promise<string | null>
+  openAudioFileDialog: () => Promise<string | null>
+  onDownloadProgress: (callback: (progress: number) => void) => () => void
   readFile: (filepath: string) => Promise<ArrayBuffer>
   revealPath: (filepath: string) => Promise<boolean>
+  checkPiper: () => Promise<{ exists: boolean; path: string }>
+  downloadPiper: () => Promise<boolean>
   listVoices: () => Promise<any[]>
   addVoice: (filePath: string, name: string) => Promise<{ success: boolean; voice?: any }>
   removeVoice: (id: string) => Promise<boolean>

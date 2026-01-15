@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { VisualBlock } from '../types/book'
 
 // --- TYPES ---
 interface AudioResult {
@@ -10,10 +11,9 @@ interface AudioPlayerProps {
   bookStructure: {
     allSentences: string[]
     sentenceToPageMap: number[]
-    pagesStructure?: { startIndex: number }[][]
+    pagesStructure?: VisualBlock[][]
   }
   visualPageIndex: number
-  setVisualPageIndex: React.Dispatch<React.SetStateAction<number>>
 }
 
 interface AudioBatch {
@@ -134,8 +134,7 @@ const pruneDiskCache = async (db: IDBDatabase) =>
 
 export function useAudioPlayer({
   bookStructure,
-  visualPageIndex,
-  setVisualPageIndex
+  visualPageIndex
 }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)

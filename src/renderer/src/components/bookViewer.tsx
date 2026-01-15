@@ -11,7 +11,6 @@ interface BookViewerProps {
   }
   visualPageIndex: number
   globalSentenceIndex: number
-  isPlaying: boolean
   onChapterClick: (pageIndex: number) => void
   settings: ReaderSettings
 }
@@ -20,7 +19,6 @@ export const BookViewer: React.FC<BookViewerProps> = ({
   bookStructure,
   visualPageIndex,
   globalSentenceIndex,
-  isPlaying,
   onChapterClick,
   settings
 }) => {
