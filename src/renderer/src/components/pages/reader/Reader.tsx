@@ -142,7 +142,12 @@ export default function Reader(): React.JSX.Element {
     if (typeof mappedPage === 'number' && mappedPage !== visualPageIndex) {
       setVisualPageIndex(mappedPage)
     }
-  }, [activeBook, isLoading, bookStructure.pagesStructure.length, bookStructure.allSentences.length])
+  }, [
+    activeBook,
+    isLoading,
+    bookStructure.pagesStructure.length,
+    bookStructure.allSentences.length
+  ])
 
   useEffect(() => {
     if (!activeBook || isLoading) return
@@ -188,9 +193,7 @@ export default function Reader(): React.JSX.Element {
     if (targetSentence === null) return
     const container = scrollContainerRef.current
     const scope = container ?? document
-    const current = scope.querySelector('[data-current-sentence="true"]') as
-      | HTMLElement
-      | null
+    const current = scope.querySelector('[data-current-sentence="true"]') as HTMLElement | null
     if (current) {
       current.scrollIntoView({ behavior: 'smooth', block: 'center' })
       pendingJumpRef.current = null
@@ -257,7 +260,7 @@ export default function Reader(): React.JSX.Element {
       } inset-x-0 z-50 flex justify-center px-4`}
     >
       <div
-        className={`w-full max-w-[720px] backdrop-blur-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.45)] transition-all ${playerTheme.shell} ${
+        className={`w-full max-w-180 backdrop-blur-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.45)] transition-all ${playerTheme.shell} ${
           isCompactHeight
             ? 'rounded-2xl px-4 py-2 flex items-center gap-3'
             : 'rounded-full pl-4 pr-6 py-3 flex items-center gap-4'
@@ -281,8 +284,8 @@ export default function Reader(): React.JSX.Element {
         </Tooltip>
 
         <div
-          className={`flex flex-col gap-1 flex-1 min-w-[120px] ${
-            isCompactHeight ? 'max-w-[160px]' : 'max-w-[220px]'
+          className={`flex flex-col gap-1 flex-1 min-w-30 ${
+            isCompactHeight ? 'max-w-40' : 'max-w-55'
           }`}
         >
           <div className="h-6 flex items-center gap-1 opacity-50">
