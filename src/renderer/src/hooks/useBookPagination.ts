@@ -1,12 +1,18 @@
 import { useMemo } from 'react'
 import { VisualBlock, TocItem } from '../types/book'
 
+type EpubNavItem = {
+  label: string
+  href: string
+  subitems?: EpubNavItem[]
+}
+
 const CHARS_PER_PAGE = 1500
 const MAX_BLOCKS_PER_PAGE = 12
 
 export function useBookPagination(
   rawChapters: string[],
-  toc: any[],
+  toc: EpubNavItem[],
   chapterHrefs: string[],
   charsPerPage: number = CHARS_PER_PAGE,
   maxBlocksPerPage: number = MAX_BLOCKS_PER_PAGE

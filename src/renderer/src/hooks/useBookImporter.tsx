@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import ePub from 'epubjs'
-import { TocItem } from '../types/book'
 import { getMimeType, getZipFile, extractContentRecursively } from '../utils/epubUtils'
 import { useBookPagination } from './useBookPagination'
 
@@ -9,10 +8,39 @@ const DEFAULT_PAGES = [
   `You can select any .epub file. The AI will extract text and images, reading it aloud continuously.`
 ]
 
+type EpubNavItem = {
+  label: string
+  href: string
+  subitems?: EpubNavItem[]
+}
+
+type EpubSpineItem = {
+  href?: string
+}
+
+type EpubBook = {
+  ready: Promise<void>
+  load: (target: string) => Promise<Document | string>
+  loaded: {
+    metadata: Promise<{ title?: string }>
+    navigation: Promise<{ toc: EpubNavItem[] }>
+    cover: Promise<string | null>
+  }
+  spine: {
+    spineItems: EpubSpineItem[]
+  }
+  archive: {
+    zip: unknown
+  }
+  path: {
+    resolve: (href: string, base: string) => string
+  }
+}
+
 export function useBookImporter() {
   const [rawChapters, setRawChapters] = useState<string[]>(DEFAULT_PAGES)
   const [chapterHrefs, setChapterHrefs] = useState<string[]>([])
-  const [toc, setToc] = useState<TocItem[]>([])
+  const [toc, setToc] = useState<EpubNavItem[]>([])
 
   const [bookTitle, setBookTitle] = useState('Nur Reader')
   const [isLoading, setIsLoading] = useState(false)
@@ -53,7 +81,7 @@ export function useBookImporter() {
 
   // 2. Core Parse Logic
   const parseEpubData = async (buffer: ArrayBuffer) => {
-    const book = ePub(buffer)
+    const book = ePub(buffer) as unknown as EpubBook
     await book.ready
 
     const metadata = await book.loaded.metadata
@@ -64,8 +92,8 @@ export function useBookImporter() {
     try {
       const coverPath = await book.loaded.cover
       if (coverPath) {
-        // @ts-expect-error
-        const zipFile = getZipFile(book.archive.zip, coverPath)
+        const zip = book.archive?.zip
+        const zipFile = getZipFile(zip, coverPath)
         if (zipFile) {
           const b64 = await zipFile.async('base64')
           const mime = getMimeType(coverPath)
@@ -82,8 +110,7 @@ export function useBookImporter() {
     const newChapters: string[] = []
     const newHrefs: string[] = []
 
-    // @ts-expect-error
-    const spineItems = book.spine.spineItems as any[]
+    const spineItems = book.spine?.spineItems || []
     console.log(`[Importer] Found ${spineItems.length} chapters.`)
 
     for (let i = 0; i < spineItems.length; i++) {
@@ -126,10 +153,10 @@ export function useBookImporter() {
                   ''
 
               if (src) {
-                // @ts-expect-error
-                const absolute = book.path.resolve(src, item.href)
-                // @ts-expect-error
-                let zipFile = getZipFile(book.archive.zip, absolute)
+                const resolvedPath = book.path?.resolve(src, target)
+                const zip = (book as { archive?: { zip?: any } }).archive?.zip
+                const absolute = resolvedPath || src
+                let zipFile = getZipFile(zip, absolute)
 
                 if (zipFile) {
                   const b64 = await zipFile.async('base64')
@@ -166,7 +193,7 @@ export function useBookImporter() {
 
     setRawChapters(newChapters)
     setChapterHrefs(newHrefs)
-    // @ts-expect-error
+
     setToc(rawToc)
 
     return { title: metadata.title || 'Unknown Book', cover: coverDataUri }
