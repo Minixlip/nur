@@ -22,7 +22,7 @@ const navClass = (isActive: boolean, collapsed: boolean) =>
 
 const navItems = [
   { path: '/', label: 'My Library', icon: <RiBookShelfLine className="text-lg" /> },
-  { path: '/voice-market', label: 'Voice Market', icon: <TiMicrophoneOutline className="text-lg" /> },
+  { path: '/voice-market', label: 'Voice Studio', icon: <TiMicrophoneOutline className="text-lg" /> },
   { path: '/settings', label: 'Settings', icon: <TbSettings className="text-lg" /> }
 ]
 
