@@ -7,7 +7,24 @@ import numpy as np
 import io
 import scipy.io.wavfile
 import inspect
+import sys
+import types
 from functools import lru_cache
+
+if os.environ.get("NUR_DISABLE_TYPEGUARD", "1") == "1":
+    typeguard_stub = types.ModuleType("typeguard")
+
+    def _typechecked(func=None, **kwargs):
+        if func is None:
+            return lambda inner: inner
+        return func
+
+    class TypeCheckError(Exception):
+        pass
+
+    typeguard_stub.typechecked = _typechecked
+    typeguard_stub.TypeCheckError = TypeCheckError
+    sys.modules.setdefault("typeguard", typeguard_stub)
 
 from piper import PiperVoice
 from TTS.api import TTS

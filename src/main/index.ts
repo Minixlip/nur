@@ -5,10 +5,11 @@ import icon from '../../resources/icon.png?asset'
 import fs from 'fs'
 import path from 'path'
 import { net } from 'electron'
-import { exec, ChildProcess } from 'child_process'
+import { exec, execFile, ChildProcess } from 'child_process'
 import { setupLibraryHandlers } from './library'
 
 let currentPlayer: ChildProcess | null = null
+let backendProcess: ChildProcess | null = null
 
 // --- CONSTANTS FOR MODEL MANAGEMENT ---
 const MODELS_DIR = path.join(app.getPath('userData'), 'models')
@@ -75,6 +76,49 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+const getBackendExecutablePath = () => {
+  const candidates: string[] = []
+  if (app.isPackaged) {
+    candidates.push(path.join(process.resourcesPath, 'nur_backend', 'nur_engine', 'nur_engine.exe'))
+    candidates.push(path.join(process.resourcesPath, 'nur_backend', 'nur_engine', 'nur_engine'))
+    candidates.push(path.join(process.resourcesPath, 'nur_backend', 'nur_engine.exe'))
+    candidates.push(path.join(process.resourcesPath, 'nur_backend', 'nur_engine'))
+    candidates.push(path.join(process.resourcesPath, 'nur_engine.exe'))
+    candidates.push(path.join(process.resourcesPath, 'nur_engine'))
+  } else {
+    candidates.push(path.join(app.getAppPath(), 'nur_backend', 'dist', 'nur_engine', 'nur_engine.exe'))
+    candidates.push(path.join(app.getAppPath(), 'nur_backend', 'dist', 'nur_engine', 'nur_engine'))
+    candidates.push(path.join(app.getAppPath(), 'nur_backend', 'nur_engine', 'nur_engine.exe'))
+    candidates.push(path.join(app.getAppPath(), 'nur_backend', 'nur_engine', 'nur_engine'))
+    candidates.push(path.join(app.getAppPath(), 'nur_backend', 'nur_engine.exe'))
+    candidates.push(path.join(app.getAppPath(), 'nur_backend', 'nur_engine'))
+  }
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null
+}
+
+const startBackend = () => {
+  if (backendProcess) return
+  const backendPath = getBackendExecutablePath()
+  if (!backendPath) {
+    console.warn('[Main] Backend executable not found. Skipping auto-start.')
+    return
+  }
+  backendProcess = execFile(backendPath, [], { windowsHide: true }, (error) => {
+    if (error) {
+      console.error('[Main] Backend exited with error:', error.message)
+    }
+    backendProcess = null
+  })
+}
+
+const stopBackend = () => {
+  if (!backendProcess) return
+  try {
+    backendProcess.kill()
+  } catch (err) {}
+  backendProcess = null
 }
 
 // --- NEW: FILE DIALOG HANDLER ---
@@ -390,6 +434,7 @@ app.whenReady().then(() => {
 
   setupLibraryHandlers()
 
+  startBackend()
   createWindow()
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -398,6 +443,11 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    stopBackend()
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  stopBackend()
 })

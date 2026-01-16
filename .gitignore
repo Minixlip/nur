@@ -4,3 +4,7 @@ out
 .DS_Store
 .eslintcache
 *.log*
+nur_backend/build_env
+nur_backend/nur_engine
+nur_backend/build
+dist

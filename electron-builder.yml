@@ -9,8 +9,21 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!nur_backend/venv/**'
+  - '!nur_backend/__pycache__/**'
+  - '!nur_backend/**/*.py'
+  - '!nur_backend/**/*.pyc'
 asarUnpack:
   - resources/**
+extraResources:
+  - from: nur_backend
+    to: nur_backend
+    filter:
+      - nur_engine/**
+      - default_speaker.wav
+      - "*.json"
+  - from: resources
+    to: resources
 win:
   executableName: nur
 nsis:
