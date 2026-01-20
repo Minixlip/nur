@@ -32,6 +32,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+# Resolve bundled resources for dev + PyInstaller onedir.
+def resolve_resource_path(filename: str) -> str:
+    if os.path.isabs(filename):
+        return filename
+    if getattr(sys, "frozen", False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, filename)
+
 # --- CONFIGURATION ---
 warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = '1'
@@ -83,13 +93,14 @@ def trim_silence_int16(samples, sample_rate, threshold=500, pad_ms=30):
 print("Warming up XTTS...")
 try:
     with gpu_lock:
-        if os.path.exists("default_speaker.wav"):
+        warmup_speaker = resolve_resource_path("default_speaker.wav")
+        if os.path.exists(warmup_speaker):
             with torch.inference_mode():
                 # Avoid autocast in warmup to prevent CUDA assert on some drivers.
                 xtts_model.tts(
                     "Ready.",
                     language="en",
-                    speaker_wav="default_speaker.wav",
+                    speaker_wav=warmup_speaker,
                     speed=1.2
                 )
             if device == "cuda":
@@ -106,8 +117,9 @@ def get_speaker_embedding(speaker_wav: str):
     if not speaker_wav:
         return None
     try:
+        speaker_path = resolve_resource_path(speaker_wav)
         if hasattr(xtts_model, "get_conditioning_latents"):
-            latents = xtts_model.get_conditioning_latents(speaker_wav=speaker_wav)
+            latents = xtts_model.get_conditioning_latents(speaker_wav=speaker_path)
             if isinstance(latents, (list, tuple)) and len(latents) >= 2:
                 return latents[0], latents[1]
             return latents
@@ -209,7 +221,11 @@ def generate_speech(request: SpeakRequest):
                     "speed": request.speed
                 }
 
-                speaker_latents = get_speaker_embedding(request.speaker_wav)
+                speaker_path = resolve_resource_path(request.speaker_wav)
+                if not os.path.exists(speaker_path):
+                    raise HTTPException(status_code=500, detail=f"Missing speaker wav: {speaker_path}")
+
+                speaker_latents = get_speaker_embedding(speaker_path)
                 if speaker_latents:
                     if isinstance(speaker_latents, tuple) and len(speaker_latents) == 2:
                         tts_kwargs["gpt_cond_latent"] = speaker_latents[0]
@@ -217,7 +233,7 @@ def generate_speech(request: SpeakRequest):
                     else:
                         tts_kwargs["speaker_embedding"] = speaker_latents
                 else:
-                    tts_kwargs["speaker_wav"] = request.speaker_wav
+                    tts_kwargs["speaker_wav"] = speaker_path
 
                 # Allow XTTS to handle long text splitting internally.
 
