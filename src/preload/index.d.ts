@@ -13,6 +13,7 @@ declare global {
       ) => Promise<any>
 
       setSession: (sessionId: string) => Promise<boolean>
+      checkBackend: () => Promise<boolean>
       loadAudio: (filepath: string) => Promise<any>
       play: (filepath: string) => Promise<void>
       stop: () => Promise<void>

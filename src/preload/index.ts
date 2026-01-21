@@ -7,6 +7,7 @@ const api = {
     ipcRenderer.invoke('tts:generate', { text, speed, sessionId, ...options }),
 
   setSession: (sessionId: string) => ipcRenderer.invoke('tts:setSession', sessionId),
+  checkBackend: () => ipcRenderer.invoke('tts:health'),
 
   // --- NEW: PIPER MANAGEMENT ---
   // Checks if the model exists in user data

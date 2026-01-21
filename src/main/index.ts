@@ -242,6 +242,36 @@ ipcMain.handle('tts:setSession', async (_event, sessionId) => {
   })
 })
 
+ipcMain.handle('tts:health', async () => {
+  return new Promise((resolve) => {
+    const request = net.request({
+      method: 'GET',
+      protocol: 'http:',
+      hostname: '127.0.0.1',
+      port: 8000,
+      path: '/health'
+    })
+    request.on('error', () => resolve({ ok: false, ttsReady: false }))
+    request.on('response', (response) => {
+      if (response.statusCode !== 200) {
+        resolve({ ok: false, ttsReady: false })
+        return
+      }
+      const chunks: Buffer[] = []
+      response.on('data', (chunk) => chunks.push(chunk))
+      response.on('end', () => {
+        try {
+          const payload = JSON.parse(Buffer.concat(chunks).toString('utf-8'))
+          resolve({ ok: true, ttsReady: payload?.tts_ready === true })
+        } catch {
+          resolve({ ok: true, ttsReady: false })
+        }
+      })
+    })
+    request.end()
+  })
+})
+
 // --- 2. GENERATE AUDIO (UPDATED) ---
 // Now accepts 'sessionId', 'engine', and 'voicePath'
 ipcMain.handle('tts:generate', async (_event, { text, speed, sessionId, engine, voicePath }) => {

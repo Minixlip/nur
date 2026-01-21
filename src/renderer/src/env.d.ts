@@ -14,6 +14,7 @@ interface ICustomAPI {
   ) => Promise<any>
 
   setSession: (sessionId: string) => Promise<boolean>
+  checkBackend: () => Promise<{ ok: boolean; ttsReady: boolean }>
   loadAudio: (filepath: string) => Promise<any>
   play: (filepath: string) => Promise<void>
   stop: () => Promise<void>

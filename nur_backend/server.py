@@ -47,6 +47,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = '1'
 
 gpu_lock = threading.Lock()
+tts_ready = False
 
 # --- STATE MANAGEMENT ---
 class AppState:
@@ -106,11 +107,15 @@ try:
             if device == "cuda":
                 torch.cuda.synchronize()
             print("Engine is warm and ready!")
+            tts_ready = True
         else:
             print("Warmup skipped: 'default_speaker.wav' not found in backend folder.")
+            # XTTS is still usable; skip warmup but mark as ready.
+            tts_ready = True
 except RuntimeError as e:
     # If CUDA asserts, skip warmup so the server can still start.
     print(f"Warmup failed (skipped): {e}")
+    tts_ready = True
 
 @lru_cache(maxsize=8)
 def get_speaker_embedding(speaker_wav: str):
@@ -149,6 +154,10 @@ def set_session(control: SessionControl):
     state.active_session_id = control.session_id
     print(f"Session updated to: {state.active_session_id}")
     return {"status": "ok", "active_session": state.active_session_id}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "tts_ready": tts_ready}
 
 @app.post("/tts")
 def generate_speech(request: SpeakRequest):
