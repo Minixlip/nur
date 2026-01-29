@@ -29,8 +29,7 @@ Nur is a desktop app that turns EPUB ebooks into synchronized audiobooks locally
 
 ## Demo
 
-- Screenshots: add to `docs/` and update this section.
-- Video: link a short walkthrough here.
+- Video: [](https://streamable.com/yxiu7j)
 
 ## Local Setup
 
@@ -83,4 +82,4 @@ resources/     # Packaged assets (engine, default speaker)
 
 ## License
 
-MIT (or specify your preferred license)
+MIT 
