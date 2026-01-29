@@ -25,6 +25,10 @@ extraResources:
   - from: resources
     to: resources
 win:
+  target:
+    - target: msi
+      arch:
+        - x64
   executableName: nur
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
