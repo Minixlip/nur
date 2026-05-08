@@ -61,7 +61,7 @@ export default function AppearanceMenu({
       onClick={onClose}
     >
       <div
-        className={`panel-slide-in-right flex h-full w-full max-w-[430px] flex-col border-l shadow-[-24px_0_80px_rgba(0,0,0,0.38)] ${chrome.dialogCard}`}
+        className={`panel-slide-in-right flex h-full w-full max-w-[640px] flex-col border-l shadow-[-24px_0_80px_rgba(0,0,0,0.38)] ${chrome.dialogCard}`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className={`border-b px-6 pb-5 pt-6 ${chrome.headerBorder}`}>

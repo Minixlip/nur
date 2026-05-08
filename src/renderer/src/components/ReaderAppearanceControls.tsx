@@ -27,7 +27,7 @@ export function ReaderAppearanceControls({
   const chrome = getAppTheme(settings.theme)
 
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-4">
       <section className={`rounded-3xl border p-5 ${chrome.insetCard}`}>
         <div className={`text-sm font-semibold ${chrome.title}`}>Theme</div>
         <div className={`mt-1 text-xs leading-5 ${chrome.muted}`}>
@@ -40,7 +40,7 @@ export function ReaderAppearanceControls({
               <button
                 key={option.id}
                 onClick={() => updateSetting('theme', option.id)}
-                className={`rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
+                className={`min-w-0 rounded-2xl border px-3 py-3 text-center text-sm font-semibold transition ${
                   active ? `${chrome.selectionRing} ring-2 ring-black/5 dark:ring-white/10` : 'opacity-85 hover:opacity-100'
                 } ${option.shell}`}
               >
@@ -92,7 +92,7 @@ export function ReaderAppearanceControls({
               <button
                 key={option.id}
                 onClick={() => updateSetting('fontFamily', option.id)}
-                className={`rounded-2xl border px-3 py-3 text-sm transition ${
+                className={`min-w-0 rounded-2xl border px-3 py-3 text-center text-sm transition ${
                   active ? chrome.accentPill : chrome.secondaryButton
                 } ${option.fontClass}`}
               >
@@ -115,7 +115,7 @@ export function ReaderAppearanceControls({
               <button
                 key={value}
                 onClick={() => updateSetting('lineHeight', value)}
-                className={`rounded-2xl border px-3 py-3 text-sm transition ${
+                className={`min-w-0 rounded-2xl border px-3 py-3 text-center text-sm transition ${
                   active ? chrome.accentPill : chrome.secondaryButton
                 }`}
               >
