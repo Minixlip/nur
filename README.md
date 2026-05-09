@@ -1,85 +1,148 @@
 # Nur
 
-Nur is a local-first desktop EPUB reader with offline text-to-speech, voice tools, page translation, and on-device book summaries.
+Nur is a local-first desktop EPUB reader that turns books into private, synchronized audiobooks.
 
-It is built for people who want the convenience of AI-assisted reading without sending their library to the cloud.
+It combines an EPUB library, local text-to-speech, sentence highlighting, page translation, voice management, and book summaries in one desktop app. The goal is simple: make reading and listening feel seamless without sending a user's books or voice data to a cloud service.
 
 ![Nur Preview](docs/preview.png)
 
-> Local-first. Private by default. Your books, voices, and reading state stay on your machine.
+> Local-first. Private by default. Your books, voices, summaries, settings, and reading state stay on your machine.
 
-## What Nur Does
+## Why Nur Exists
 
-- Imports and reads EPUB books in a desktop library
-- Turns books into synchronized local audiobooks
-- Highlights the currently spoken sentence during playback
-- Supports two local TTS engines:
-  - `Piper`: fast, lightweight, and the default engine
-  - `Chatterbox`: higher-quality local narration with a longer startup buffer for smoother playback
-- Lets you manage reusable voices in Voice Studio
-- Saves reading progress, playback state, and reader settings locally
-- Translates the current page locally into:
-  - Spanish
-  - French
-  - Arabic
-- Plays translated text back with matching local voices
-- Generates a local synopsis for books in the library
-- Applies reader appearance settings across the wider app UI
-- Minimizes to the system tray on supported desktop platforms
+Most AI reading tools are cloud-based, subscription-based, or not designed for long-form EPUB reading. Nur explores a different approach: a free, open-source desktop reader where the reading experience, speech generation, and supporting AI features run locally.
 
-## Feature Highlights
+Nur is built for readers who want:
 
-### Reading
+- a private way to listen to EPUB books
+- synchronized read-along highlighting
+- local voices instead of cloud TTS APIs
+- adjustable reading appearance and playback behavior
+- multilingual reading help without leaving the book
+- an installable desktop app rather than a collection of scripts
 
-- Paginated EPUB reader with progress restore
-- Auto page turn during playback
-- Table of contents navigation
-- Reader controls for font size, spacing, typeface, and theme
-- Dark, sepia, and light reading themes
-
-### Audio
-
-- Sentence-level highlighting synchronized to narration
-- Smooth local playback pipeline with startup buffering for premium narration
-- Local voice selection and reusable speaker assets
-- Separate default and premium engine paths for speed vs quality
-
-### Translation
-
-- Page-level local translation for supported languages
-- Local translated-audio preview
-- RTL-aware rendering for Arabic
+## Current Features
 
 ### Library
 
-- Recent reads and progress indicators
-- On-device synopsis generation from EPUB content
-- Search and quick resume
+- Import and manage EPUB books locally
+- Save reading progress per book
+- Resume books from the library or recent reads
+- Search the local library
+- Generate and read local book summaries
+- Store cover art, metadata, progress, and summary state locally
 
-### Diagnostics
+### Reader
 
-- Backend/runtime health reporting
-- Revealable log files
-- Recovery actions for engine/model issues
+- Paginated EPUB reading view
+- Stable page restoration when resizing the window
+- Sentence-level highlighting synchronized with spoken narration
+- Automatic page turn when playback reaches the end of a page
+- Table of contents navigation
+- Appearance controls for:
+  - light, sepia, and dark themes
+  - font size
+  - typeface
+  - line spacing
+- Reader appearance settings are persisted and applied across the wider app UI
 
-## Privacy
+### Local Text-to-Speech
 
-Nur is designed to run locally. Reading, TTS, translation, and summary generation are intended to happen on-device.
+Nur supports two local narration paths:
 
-First use of some optional models may download model files to your machine and then cache them locally. After that, playback and reading workflows remain local.
+- `Piper`: the fast default engine for responsive local playback on most machines
+- `Chatterbox`: a higher-quality local narration option for stronger hardware
+
+Playback features include:
+
+- smooth buffering for long-form reading
+- stop, pause, resume, and page-to-page continuation
+- sentence-aligned audio generation for accurate highlighting
+- playback settings for speed, quality mode, buffering, and low-end devices
+
+### Voice Studio
+
+- Add reusable voice samples
+- Store local voice presets
+- Select active voice references for supported narration workflows
+- Keep voice assets on the user's machine
+
+### Translation
+
+- Translate the current page locally into:
+  - Spanish
+  - French
+  - Arabic
+- Preview translated text inside the reader
+- Play translated text using matching local Piper voices
+- RTL-aware display for Arabic
+
+### Local Summaries
+
+- Extract clean EPUB content locally
+- Generate a short synopsis for each book in the library
+- Show the full summary in an accessible modal
+- Refresh summaries when needed
+
+The summary feature currently uses Nur's local synopsis pipeline (`local-synopsis-v2`) built around EPUB content extraction, premise detection, and structured summary generation. It is intentionally lightweight so it does not require loading a large LLM into memory.
+
+### Desktop App Behavior
+
+- Native Electron desktop shell
+- App name, icon, and packaged resources configured
+- Minimize-to-tray support on supported desktop platforms
+- Local backend process management
+- Dynamic local backend port selection to avoid port conflicts
+- Runtime health checks, logs, and recovery actions
+- Windows installer, macOS package, and Linux package build targets
+
+## Privacy Model
+
+Nur is designed to keep reading workflows local.
+
+- EPUB files are imported and stored locally.
+- Reading progress and settings are saved locally.
+- Voice samples stay on the user's machine.
+- TTS requests are handled by the local backend.
+- Translation and summary generation are designed to run locally.
+
+Some models are downloaded on first use and cached in the user's app data directory. After a model is cached, the related workflow can run locally without repeatedly downloading it.
+
+Nur does not currently provide cloud sync, accounts, telemetry, or hosted inference.
+
+## Model and Hardware Notes
+
+`Piper` is the default path and is suitable for most machines. The default English Piper voice is prepared automatically and cached locally.
+
+`Chatterbox` provides higher-quality narration but is heavier. A capable GPU is strongly recommended:
+
+- Windows users will get the best premium-engine performance on a supported NVIDIA GPU.
+- Apple Silicon can use local acceleration, but premium playback may need a longer startup buffer.
+- CPU-only systems should use Piper for the smoothest experience.
+
+Translation models and translated Piper voices are also prepared on first use for each supported language.
+
+## Known Limitations
+
+- DRM-protected EPUBs are not supported.
+- OCR for scanned books is not currently included.
+- Mobile builds are not currently targeted.
+- Chatterbox quality and startup time depend heavily on local hardware.
+- Unsigned builds may trigger Windows SmartScreen or macOS Gatekeeper warnings.
+- Local model downloads require internet access the first time a model is prepared.
 
 ## Architecture
 
-Nur is split into three parts:
+Nur is split into three main parts:
 
 1. Electron main process
-   Handles the application window, tray behavior, library persistence, IPC, packaging/runtime checks, and backend process management.
+   Handles app windows, tray behavior, IPC, library persistence, packaging checks, model download orchestration, and backend process management.
 2. React renderer
-   Renders the library, reader, settings, voice tools, and translation/summary UI.
+   Renders the library, reader, settings, Voice Studio, translation UI, summary UI, and playback controls.
 3. Python backend
-   Runs the local TTS, translation, and summary services behind a small FastAPI server.
+   Runs local generation services through FastAPI, including TTS, translation, and synopsis generation.
 
-At runtime the renderer asks Electron for file and app operations, and Electron communicates with the local backend for generation tasks.
+The renderer talks to Electron through a preload bridge. Electron handles trusted file/app operations and communicates with the local Python backend for generation tasks.
 
 ## Tech Stack
 
@@ -89,55 +152,54 @@ At runtime the renderer asks Electron for file and app operations, and Electron 
 - Vite / electron-vite
 - Tailwind CSS
 - FastAPI
-- PyTorch-based local model stack
-- PyInstaller for packaging the backend
+- PyTorch / Transformers-based local model stack
+- Piper TTS
+- Chatterbox TTS
+- PyInstaller for backend packaging
+- electron-builder for desktop installers/packages
 
 ## Repository Layout
 
 ```text
 src/
-  main/        Electron main process
-  preload/     Context bridge APIs
-  renderer/    React UI
+  main/        Electron main process, IPC, packaging/runtime orchestration
+  preload/     Context bridge APIs exposed to the renderer
+  renderer/    React UI for library, reader, settings, voice, translation
   shared/      Shared TypeScript contracts
+
 nur_backend/
   nur_tts_backend/  FastAPI backend and local AI services
-resources/     Packaged runtime assets
+
+resources/     Runtime assets
+build/         App icons and macOS entitlements
 scripts/       Build, packaging, smoke, and release scripts
 docs/          Project docs and assets
 ```
 
-## Requirements
-
-For development:
+## Development Requirements
 
 - Node.js 20+
 - npm
 - Python 3.10 or 3.11
+- Platform-specific build tools for packaged releases
 
-For the best `Chatterbox` experience:
-
-- A capable GPU is strongly recommended
-- Windows users will get the best premium-engine performance on a supported NVIDIA setup
-- Apple Silicon can use MPS, but premium playback may need longer startup buffering
-
-`Piper` remains the fast default path for lower-end machines.
+For Chatterbox development, a CUDA-capable NVIDIA GPU is recommended on Windows.
 
 ## Getting Started
 
-### Install Dependencies
+Install JavaScript dependencies:
 
 ```bash
 npm install
 ```
 
-### Run in Development
+Run the app in development:
 
 ```bash
 npm run dev
 ```
 
-If you change the Python backend or need to rebuild the packaged backend runtime:
+Prepare the packaged Python backend after backend changes:
 
 ```bash
 npm run backend:prepare
@@ -145,75 +207,100 @@ npm run backend:prepare
 
 ## Build Commands
 
-### Standard Build
+Create a standard frontend/main-process build:
 
 ```bash
 npm run build
 ```
 
-### Packaged Builds
+Create packaged builds:
 
 ```bash
-# Unpacked smoke target
+# Unpacked build for local smoke testing
 npm run build:unpack
 
-# Windows installer / packaged build
+# Windows NSIS installer
 npm run build:win
 
-# macOS build
+# macOS DMG/ZIP build, must be run on macOS
 npm run build:mac
 
-# Linux build
+# Linux AppImage/snap/deb targets
 npm run build:linux
 ```
 
 ## Release Validation
 
-Before cutting a release:
+Before publishing a release, run:
 
 ```bash
+npm run lint
 npm run typecheck
 npm run release:check
 npm run smoke:release
 ```
 
-See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the full manual QA and publishing flow.
+Then complete the manual QA flow in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
-## Backend and Model Notes
+Important release checks:
 
-- `Piper` is the default TTS engine.
-- `Chatterbox` is prepared on demand and is intended as the premium local narration option.
-- Translation models are loaded locally on first use for supported languages.
-- Library summaries currently use a local synopsis pipeline (`local-synopsis-v2`) built from EPUB content extraction and premise detection.
-- Downloaded/runtime model assets are cached under the user data directory.
+- first launch on a clean machine
+- Piper download/preparation and playback
+- Chatterbox preparation and playback on supported hardware
+- import, read, pause, resume, stop, and auto-page-turn behavior
+- theme/settings persistence
+- translation for supported languages
+- local summary generation
+- tray minimize and restore
+- packaged backend startup
+- installer trust/signing behavior on the target platform
 
-## Current Build / Packaging Notes
+## Packaging Notes
 
-- The Python backend must be built on the same platform you want to ship.
-- `npm run build:mac` should be run on a real Mac.
-- Apple Silicon and Intel macOS builds are handled separately through the current build flow.
-- Unsigned builds may trigger platform trust warnings during install or launch.
+- The Python backend must be built on the same platform you intend to ship.
+- `npm run build:mac` should be run on real macOS hardware.
+- Apple Silicon and Intel macOS builds are handled separately by the current build flow.
+- Windows builds currently target x64 NSIS installers.
+- macOS signing/notarization requires Apple developer credentials.
+- Unsigned releases can still be shared for testing, but users may see operating-system trust warnings.
 
 ## Project Status
 
-Nur is currently positioned as a polished local EPUB + TTS desktop app with:
+Nur is currently a polished local-first EPUB + TTS desktop app moving toward public testing.
 
-- stable Windows packaging flow
-- local premium and fast TTS options
-- local translation and local synopsis generation
-- release tooling and smoke validation already in the repo
+The core release experience is in place:
 
-If you are shipping publicly, validate packaged builds on the actual target platform before release.
+- local EPUB library
+- synchronized sentence highlighting
+- fast default TTS with Piper
+- higher-quality Chatterbox narration path
+- Voice Studio
+- local page translation
+- local book summaries
+- persistent settings and themes
+- packaged backend build flow
+- desktop installer/package targets
+- release checklist and smoke validation scripts
+
+The main remaining work before a broader public release is cross-machine QA, especially on clean Windows installs, macOS hardware, and lower-end devices.
 
 ## Contributing
 
 Contributions are welcome.
 
-If you are working on core runtime features, prefer validating these before opening a PR:
+Before opening a PR, run:
 
-- `npm run typecheck`
-- `npm run release:check`
-- `npm run smoke:release`
+```bash
+npm run lint
+npm run typecheck
+npm run release:check
+```
+
+For packaging-related changes, also run:
+
+```bash
+npm run smoke:release
+```
 
 ## License
 
