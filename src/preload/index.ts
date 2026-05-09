@@ -13,6 +13,7 @@ const api = {
   checkBackend: () => ipcRenderer.invoke('tts:health'),
   getTtsStatus: () => ipcRenderer.invoke('tts:getStatus'),
   ensureModel: (engine: TtsEngine) => ipcRenderer.invoke('tts:ensureModel', engine),
+  getBackendBaseUrl: () => ipcRenderer.invoke('app:getBackendBaseUrl'),
   translatePage: (text: string, targetLanguage: TranslationTargetLanguage) =>
     ipcRenderer.invoke('translation:translatePage', { text, targetLanguage }),
   summarizeBook: (text: string, title: string): Promise<BookSummaryResult> =>

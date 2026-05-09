@@ -122,7 +122,10 @@ def stream_piper_speech(request: SpeakRequest):
     def pcm_stream():
         try:
             for chunk_bytes in iter_piper_audio_bytes(
-                runtime, request.text, request.session_id
+                runtime,
+                request.text,
+                request.session_id,
+                request.piper_model_path,
             ):
                 yield chunk_bytes
         except Exception as error:
@@ -151,13 +154,15 @@ def generate_speech(request: SpeakRequest):
 
     try:
         if request.engine == 'piper':
-            voice = ensure_piper_voice(runtime, request.piper_model_path)
-            raw_audio = collect_piper_audio_bytes(
-                runtime, request.text, request.session_id
+            raw_audio, sample_rate = collect_piper_audio_bytes(
+                runtime,
+                request.text,
+                request.session_id,
+                request.piper_model_path,
             )
             audio_np = np.frombuffer(raw_audio, dtype=np.int16)
-            audio_np = trim_silence_int16(audio_np, voice.config.sample_rate)
-            audio_data = encode_wav_bytes(audio_np, voice.config.sample_rate)
+            audio_np = trim_silence_int16(audio_np, sample_rate)
+            audio_data = encode_wav_bytes(audio_np, sample_rate)
         elif is_chatterbox_engine(request.engine):
             audio_data = generate_chatterbox_audio(
                 runtime,

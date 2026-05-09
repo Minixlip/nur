@@ -89,6 +89,7 @@ export function registerIpcHandlers({
   ipcMain.handle('tts:downloadPiper', async () => ensurePiperDownloaded())
   ipcMain.handle('tts:getStatus', async () => getTtsStatus())
   ipcMain.handle('app:getRuntimeStatus', async () => getRuntimeStatus())
+  ipcMain.handle('app:getBackendBaseUrl', () => `http://${backendHost}:${backendPort}`)
   ipcMain.handle('app:restartBackend', async () => restartBackend())
   ipcMain.handle('app:checkForUpdates', async () => checkForUpdates())
   ipcMain.handle('app:quitAndInstallUpdate', async () => quitAndInstallUpdate())
@@ -128,7 +129,9 @@ export function registerIpcHandlers({
         console.warn('Backend session error:', error.message)
         resolve(false)
       })
-      request.on('response', () => resolve(true))
+      request.on('response', (response) => {
+        resolve(Boolean(response.statusCode && response.statusCode >= 200 && response.statusCode < 300))
+      })
       request.write(JSON.stringify({ session_id: sessionId }))
       request.end()
     })

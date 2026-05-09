@@ -6,7 +6,18 @@ import eslintPluginReactHooks from 'eslint-plugin-react-hooks'
 import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out'] },
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/out/**',
+      '**/*.tsbuildinfo',
+      'nur_backend/build/**',
+      'nur_backend/dist/**',
+      'nur_backend/nur_engine/**',
+      'nur_backend/.build-env-*/**'
+    ]
+  },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],
@@ -26,6 +37,24 @@ export default defineConfig(
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,
       ...eslintPluginReactRefresh.configs.vite.rules
+    }
+  },
+  {
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/ban-ts-comment': 'off',
+      'react/prop-types': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
+      ],
+      'prefer-const': 'warn',
+      'no-empty': ['error', { allowEmptyCatch: true }]
     }
   },
   eslintConfigPrettier

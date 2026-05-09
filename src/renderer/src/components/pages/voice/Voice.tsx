@@ -15,7 +15,9 @@ export default function Voice() {
   const [engine, setEngine] = useState<TtsEngine>(getStoredTtsEngine())
   const { settings } = useReaderSettings()
   const theme = getAppTheme(settings.theme)
-  const [customVoicePath, setCustomVoicePath] = useState<string | null>(null)
+  const [customVoicePath, setCustomVoicePath] = useState<string | null>(() =>
+    localStorage.getItem('custom_voice_path')
+  )
   const [voiceLibrary, setVoiceLibrary] = useState<VoiceSample[]>([])
   const [pendingVoicePath, setPendingVoicePath] = useState<string | null>(null)
   const [pendingVoiceName, setPendingVoiceName] = useState('')
@@ -23,7 +25,6 @@ export default function Voice() {
   useEffect(() => {
     const syncEngine = () => setEngine(getStoredTtsEngine())
     syncEngine()
-    setCustomVoicePath(localStorage.getItem('custom_voice_path'))
     const loadLibrary = async () => {
       try {
         const voices = await window.api.listVoices()

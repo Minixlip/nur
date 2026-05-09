@@ -8,7 +8,7 @@ from piper import PiperVoice
 from .context import RuntimeContext, is_request_cancelled
 
 
-def ensure_piper_voice(context: RuntimeContext, model_path: str) -> PiperVoice:
+def _ensure_piper_voice_locked(context: RuntimeContext, model_path: str) -> PiperVoice:
     if not model_path or not os.path.exists(model_path):
         print(f'Piper Error: Path not found: {model_path}')
         raise HTTPException(status_code=400, detail='Piper model path invalid')
@@ -30,47 +30,58 @@ def ensure_piper_voice(context: RuntimeContext, model_path: str) -> PiperVoice:
     return context.piper.voice
 
 
-def iter_piper_audio_bytes(context: RuntimeContext, text: str, session_id: str):
-    if context.piper.voice is None:
-        raise RuntimeError('Piper voice is not loaded')
+def ensure_piper_voice(context: RuntimeContext, model_path: str) -> PiperVoice:
+    with context.piper.lock:
+        return _ensure_piper_voice_locked(context, model_path)
 
-    stream = context.piper.voice.synthesize(text, None)
-    emitted_audio = False
 
-    for chunk in stream:
-        if is_request_cancelled(context, session_id):
-            print('Cancelling Piper generation for stale session')
-            break
+def iter_piper_audio_bytes(
+    context: RuntimeContext, text: str, session_id: str, model_path: str
+):
+    with context.piper.lock:
+        voice = _ensure_piper_voice_locked(context, model_path)
+        stream = voice.synthesize(text, None)
+        emitted_audio = False
 
-        if hasattr(chunk, 'audio_int16_bytes'):
-            chunk_bytes = chunk.audio_int16_bytes
-        elif hasattr(chunk, 'bytes'):
-            chunk_bytes = chunk.bytes
-        else:
-            print(f'Unknown chunk structure: {dir(chunk)}')
-            raise RuntimeError('Cannot extract bytes from AudioChunk')
+        for chunk in stream:
+            if is_request_cancelled(context, session_id):
+                print('Cancelling Piper generation for stale session')
+                break
 
-        if not chunk_bytes:
-            continue
+            if hasattr(chunk, 'audio_int16_bytes'):
+                chunk_bytes = chunk.audio_int16_bytes
+            elif hasattr(chunk, 'bytes'):
+                chunk_bytes = chunk.bytes
+            else:
+                print(f'Unknown chunk structure: {dir(chunk)}')
+                raise RuntimeError('Cannot extract bytes from AudioChunk')
 
-        emitted_audio = True
-        yield chunk_bytes
+            if not chunk_bytes:
+                continue
 
-    if not emitted_audio and not is_request_cancelled(context, session_id):
-        raise RuntimeError('Piper generation yielded no audio data')
+            emitted_audio = True
+            yield chunk_bytes
+
+        if not emitted_audio and not is_request_cancelled(context, session_id):
+            raise RuntimeError('Piper generation yielded no audio data')
 
 
 def collect_piper_audio_bytes(
-    context: RuntimeContext, text: str, session_id: str
-) -> bytes:
-    raw_audio = b''
-    for chunk_bytes in iter_piper_audio_bytes(context, text, session_id):
-        raw_audio += chunk_bytes
+    context: RuntimeContext, text: str, session_id: str, model_path: str
+) -> tuple[bytes, int]:
+    chunks: list[bytes] = []
+    for chunk_bytes in iter_piper_audio_bytes(context, text, session_id, model_path):
+        chunks.append(chunk_bytes)
 
-    if not raw_audio and is_request_cancelled(context, session_id):
+    if not chunks and is_request_cancelled(context, session_id):
         raise HTTPException(status_code=499, detail='Request cancelled')
 
+    raw_audio = b''.join(chunks)
     if len(raw_audio) == 0:
         raise RuntimeError('Piper generation yielded no audio data')
 
-    return raw_audio
+    with context.piper.lock:
+        voice = _ensure_piper_voice_locked(context, model_path)
+        sample_rate = voice.config.sample_rate
+
+    return raw_audio, sample_rate

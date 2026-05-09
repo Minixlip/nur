@@ -1,13 +1,10 @@
 import type { CSSProperties } from 'react'
 import type { PlaybackPreferences, PlaybackQualityMode } from '../../../hooks/usePlaybackPreferences'
 import { getAppTheme } from '../../../theme/appTheme'
+import { MAX_TTS_SPEED, MIN_TTS_SPEED } from '../../../utils/playbackBounds'
 import Tooltip from '../../ui/Tooltip'
 
 type ReaderThemeMode = 'light' | 'sepia' | 'dark'
-
-export const MIN_TTS_SPEED = 0.85
-export const MAX_TTS_SPEED = 1.15
-export const clampTtsSpeed = (value: number) => Math.min(MAX_TTS_SPEED, Math.max(MIN_TTS_SPEED, value))
 
 const getSliderFill = (theme: ReaderThemeMode) => {
   if (theme === 'light') return '#1f2937'
@@ -86,6 +83,7 @@ export function VoiceDeliverySection({
           <Tooltip label="Speech speed" className="w-full">
             <input
               type="range"
+              aria-label="Speech speed"
               min={MIN_TTS_SPEED}
               max={MAX_TTS_SPEED}
               step={0.01}
@@ -252,6 +250,7 @@ export function PerformanceSection({
             <Tooltip label="Initial buffer size" className="w-full">
               <input
                 type="range"
+                aria-label="Initial buffer size"
                 min={1}
                 max={6}
                 step={1}
@@ -274,6 +273,7 @@ export function PerformanceSection({
             <Tooltip label="Steady buffer size" className="w-full">
               <input
                 type="range"
+                aria-label="Steady buffer size"
                 min={3}
                 max={14}
                 step={1}
@@ -296,6 +296,7 @@ export function PerformanceSection({
             <Tooltip label="Crossfade duration" className="w-full">
               <input
                 type="range"
+                aria-label="Crossfade duration"
                 min={0}
                 max={120}
                 step={5}

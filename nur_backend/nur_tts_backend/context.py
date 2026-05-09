@@ -27,6 +27,7 @@ class ChatterboxRuntime:
 class PiperRuntime:
     voice: Any = None
     loaded_path: str | None = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 @dataclass

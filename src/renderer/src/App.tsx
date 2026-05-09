@@ -77,6 +77,7 @@ function AppFrame({
       ? { title: 'Reader', description: 'Continue reading with synced playback.' }
       : routeMeta['/'])
   const isReaderRoute = location.pathname.startsWith('/read/')
+  const isSettingsRoute = location.pathname === '/settings'
   const hasBackendIssue = !backendOk && backendState === 'error'
   const hasModelIssue = selectedModelState === 'error'
   const isPreparingPiper = engine === 'piper' && selectedModelState === 'downloading'
@@ -190,7 +191,7 @@ function AppFrame({
         </main>
       </div>
 
-      {!backendReady && (
+      {!backendReady && !isSettingsRoute && (
         <div className={`absolute inset-0 z-20 flex items-center justify-center backdrop-blur-2xl ${theme.overlayBackdrop}`}>
           <div className={`w-full max-w-[28rem] rounded-[2rem] border px-8 py-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)] ${theme.overlayCard}`}>
             <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full border ${theme.softCard}`}>

@@ -1,4 +1,5 @@
 import { XttsQualityMode } from './types'
+import { MAX_TTS_SPEED, MIN_TTS_SPEED, clampTtsSpeed } from '../../utils/playbackBounds'
 
 const DEFAULT_BATCH_RAMP = [10, 14, 20]
 const DEFAULT_BATCH_SIZE_STANDARD = 40
@@ -18,13 +19,10 @@ const TTS_SPEED_STORAGE_KEY = 'tts_playback_speed'
 const XTTS_QUALITY_STORAGE_KEY = 'tts_quality_mode'
 const LEGACY_XTTS_QUALITY_STORAGE_KEY = 'xtts_quality_mode'
 const DEFAULT_TTS_SPEED = 1.0
-const MIN_TTS_SPEED = 0.85
-const MAX_TTS_SPEED = 1.15
 const ENABLE_PREWARM = false
 const STREAM_INITIAL_PCM_BYTES = 4096
 const STREAM_STEADY_PCM_BYTES = 16384
 const STREAM_CHUNK_FADE_SEC = 0.008
-const BACKEND_BASE_URL = 'http://127.0.0.1:8000'
 const XTTS_BUFFERED_FADE_SEC = 0
 const XTTS_STUDIO_MAX_TTS_CHARS = 1500
 const XTTS_BALANCED_INITIAL_BUFFER_SEC = 28
@@ -33,8 +31,6 @@ const XTTS_STUDIO_INITIAL_BUFFER_SEC = 42
 const XTTS_STUDIO_STEADY_BUFFER_SEC = 64
 const XTTS_LOW_END_INITIAL_BUFFER_SEC = 20
 const XTTS_LOW_END_STEADY_BUFFER_SEC = 30
-
-const clampTtsSpeed = (value: number) => Math.min(MAX_TTS_SPEED, Math.max(MIN_TTS_SPEED, value))
 
 const getStoredTtsSpeed = () => {
   const stored = Number(localStorage.getItem(TTS_SPEED_STORAGE_KEY))
@@ -160,7 +156,6 @@ export {
   MIN_TTS_SPEED,
   MAX_TTS_SPEED,
   ENABLE_PREWARM,
-  BACKEND_BASE_URL,
   STREAM_INITIAL_PCM_BYTES,
   STREAM_STEADY_PCM_BYTES,
   STREAM_CHUNK_FADE_SEC,

@@ -256,7 +256,14 @@ export const createBackendRuntime = ({
     }
 
     console.log(`[Main] Launching Nur engine for ${process.platform}: ${backendPath}`)
-    const child = execFile(backendPath, [], process.platform === 'win32' ? { windowsHide: true } : {})
+    const child = execFile(backendPath, [], {
+      ...(process.platform === 'win32' ? { windowsHide: true } : {}),
+      env: {
+        ...process.env,
+        NUR_BACKEND_HOST: backendHost,
+        NUR_BACKEND_PORT: String(backendPort)
+      }
+    })
     backendProcess = child
 
     child.once('spawn', () => {

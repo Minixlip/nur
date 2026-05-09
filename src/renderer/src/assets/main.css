@@ -116,6 +116,14 @@ body {
   outline: none;
 }
 
+.glass-slider:focus-visible {
+  outline: 2px solid var(--slider-fill, rgba(255, 255, 255, 0.7));
+  outline-offset: 5px;
+  box-shadow:
+    0 0 0 4px var(--slider-glow, rgba(255, 255, 255, 0.15)),
+    inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
 .glass-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;

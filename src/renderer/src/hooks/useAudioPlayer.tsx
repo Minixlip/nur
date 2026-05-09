@@ -15,7 +15,6 @@ import {
   DEFAULT_CROSSFADE_SEC,
   DEFAULT_INITIAL_BUFFER,
   DEFAULT_STEADY_BUFFER,
-  BACKEND_BASE_URL,
   ENABLE_PREWARM,
   getBatchRampForEngine,
   getBatchSizeStandardForEngine,
@@ -679,7 +678,8 @@ export function useAudioPlayer({
       }
 
       try {
-        const response = await fetch(`${BACKEND_BASE_URL}/tts/stream`, {
+        const backendBaseUrl = await window.api.getBackendBaseUrl()
+        const response = await fetch(`${backendBaseUrl}/tts/stream`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

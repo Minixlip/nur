@@ -428,7 +428,7 @@ export default function Library(): React.JSX.Element {
                   {selectedSummaryBook.summaryUpdatedAt
                     ? `Updated ${new Date(selectedSummaryBook.summaryUpdatedAt).toLocaleString()}`
                     : 'Generated locally on this device'}
-                  {selectedSummaryBook.summaryModel ? ` • ${selectedSummaryBook.summaryModel}` : ''}
+                  {selectedSummaryBook.summaryModel ? ` - ${selectedSummaryBook.summaryModel}` : ''}
                 </div>
               </div>
 

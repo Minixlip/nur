@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ReaderAppearanceControls } from '../../ReaderAppearanceControls'
 import { useReaderSettings } from '../../../hooks/useReaderSettings'
 import {
@@ -10,10 +10,10 @@ import { useTtsStatus } from '../../../hooks/useTtsStatus'
 import { getAppTheme } from '../../../theme/appTheme'
 import { setStoredTtsEngine, type TtsEngine } from '../../../utils/tts'
 import {
-  clampTtsSpeed,
   PerformanceSection,
   VoiceDeliverySection
 } from './SettingsPlaybackSections'
+import { clampTtsSpeed } from '../../../utils/playbackBounds'
 import {
   AboutPrivacySection,
   DiagnosticsSection,
@@ -27,19 +27,15 @@ export default function Settings(): React.JSX.Element {
   const { preferences, updatePreference, resetPreferences } = usePlaybackPreferences()
   const { engine, status } = useTtsStatus(900)
   const runtime = useRuntimeStatus(2500)
-  const [customVoicePath, setCustomVoicePath] = useState<string>('')
+  const [customVoicePath, setCustomVoicePath] = useState<string>(
+    () => localStorage.getItem('custom_voice_path') || ''
+  )
 
   const piperStatus = status.piper
   const chatterboxStatus = status.chatterbox
   const piperPath = piperStatus.path || ''
   const piperProgress = piperStatus.progress ?? 0
   const { lowEndMode } = preferences
-
-  useEffect(() => {
-    const savedVoice = localStorage.getItem('custom_voice_path') || ''
-
-    setCustomVoicePath(savedVoice)
-  }, [])
 
   const handleDownload = async (engineToPrepare: TtsEngine, event?: React.MouseEvent) => {
     event?.stopPropagation()

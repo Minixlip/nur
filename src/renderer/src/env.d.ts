@@ -26,6 +26,7 @@ interface ICustomAPI {
   checkBackend: () => Promise<{ ok: boolean; ttsReady: boolean }>
   getTtsStatus: () => Promise<TtsStatusSnapshot>
   ensureModel: (engine: TtsEngine) => Promise<TtsStatusSnapshot>
+  getBackendBaseUrl: () => Promise<string>
   translatePage: (
     text: string,
     targetLanguage: TranslationTargetLanguage

@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, Menu, Tray, nativeImage } from 'electron'
 import { join } from 'path'
+import { createServer } from 'node:net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import fs from 'fs'
@@ -21,7 +22,7 @@ const WINDOW_TITLE = 'NUR'
 const APP_ID = 'com.minixlip.nur'
 const REPOSITORY_URL = 'https://github.com/Minixlip/nur'
 const BACKEND_HOST = '127.0.0.1'
-const BACKEND_PORT = 8000
+const DEFAULT_BACKEND_PORT = Number(process.env.NUR_BACKEND_PORT || 8000)
 const isSmokeTest = process.argv.includes('--smoke-test') || process.env.NUR_SMOKE_TEST === '1'
 
 const VOICES_DIR = join(app.getPath('userData'), 'voices')
@@ -33,28 +34,34 @@ if (!fs.existsSync(VOICES_DIR)) {
 
 installFileLogger()
 
-const backendRuntime = createBackendRuntime({
-  appName: APP_NAME,
-  appId: APP_ID,
-  repositoryUrl: REPOSITORY_URL,
-  backendHost: BACKEND_HOST,
-  backendPort: BACKEND_PORT,
-  getPiperStatus,
-  ensurePiperDownloaded
-})
-
-const {
-  backendJsonRequest,
-  getRuntimeStatus,
-  getTtsStatus,
-  restartBackend,
-  startBackend,
-  stopBackend,
-  runSmokeTest
-} = backendRuntime
-
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+let backendRuntime: ReturnType<typeof createBackendRuntime> | null = null
+
+const stopActiveBackend = () => {
+  backendRuntime?.stopBackend()
+}
+
+const getAvailableBackendPort = (preferredPort: number) =>
+  new Promise<number>((resolve) => {
+    const server = createServer()
+
+    server.once('error', () => {
+      const fallback = createServer()
+      fallback.once('error', () => resolve(preferredPort))
+      fallback.listen(0, BACKEND_HOST, () => {
+        const address = fallback.address()
+        const port = typeof address === 'object' && address ? address.port : preferredPort
+        fallback.close(() => resolve(port))
+      })
+    })
+
+    server.listen(preferredPort, BACKEND_HOST, () => {
+      const address = server.address()
+      const port = typeof address === 'object' && address ? address.port : preferredPort
+      server.close(() => resolve(port))
+    })
+  })
 
 const getWindowIcon = () => nativeImage.createFromPath(icon)
 
@@ -193,18 +200,38 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setName(APP_NAME)
   electronApp.setAppUserModelId(APP_ID)
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  const backendPort = await getAvailableBackendPort(DEFAULT_BACKEND_PORT)
+  backendRuntime = createBackendRuntime({
+    appName: APP_NAME,
+    appId: APP_ID,
+    repositoryUrl: REPOSITORY_URL,
+    backendHost: BACKEND_HOST,
+    backendPort,
+    getPiperStatus,
+    ensurePiperDownloaded
+  })
+
+  const {
+    backendJsonRequest,
+    getRuntimeStatus,
+    getTtsStatus,
+    restartBackend,
+    startBackend,
+    runSmokeTest
+  } = backendRuntime
+
   setupLibraryHandlers()
   initAutoUpdater()
   registerIpcHandlers({
     backendHost: BACKEND_HOST,
-    backendPort: BACKEND_PORT,
+    backendPort,
     voicesDir: VOICES_DIR,
     voicesDbPath: VOICES_DB,
     hasPiperModel,
@@ -244,7 +271,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    stopBackend()
+    stopActiveBackend()
     app.quit()
   }
 })
@@ -252,5 +279,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   tray?.destroy()
   tray = null
-  stopBackend()
+  stopActiveBackend()
 })
