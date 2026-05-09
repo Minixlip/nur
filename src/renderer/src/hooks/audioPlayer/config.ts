@@ -12,6 +12,8 @@ const LOW_END_BATCH_SIZE_STANDARD = 24
 const LOW_END_MAX_TTS_CHARS = 140
 const LOW_END_INITIAL_BUFFER = 2
 const LOW_END_STEADY_BUFFER = 5
+const SENTENCE_ALIGNED_BATCH_RAMP = [1, 1, 1]
+const SENTENCE_ALIGNED_BATCH_SIZE_STANDARD = 1
 const TTS_SPEED_STORAGE_KEY = 'tts_playback_speed'
 const XTTS_QUALITY_STORAGE_KEY = 'tts_quality_mode'
 const LEGACY_XTTS_QUALITY_STORAGE_KEY = 'xtts_quality_mode'
@@ -24,12 +26,6 @@ const STREAM_STEADY_PCM_BYTES = 16384
 const STREAM_CHUNK_FADE_SEC = 0.008
 const BACKEND_BASE_URL = 'http://127.0.0.1:8000'
 const XTTS_BUFFERED_FADE_SEC = 0
-const STREAMED_PIPER_FIRST_BATCH_WORDS = 1
-const XTTS_FIRST_BATCH_WORDS = 26
-const XTTS_LOW_END_FIRST_BATCH_WORDS = 18
-const XTTS_STUDIO_FIRST_BATCH_WORDS = 64
-const XTTS_STUDIO_BATCH_RAMP = [XTTS_STUDIO_FIRST_BATCH_WORDS, 96, 132]
-const XTTS_STUDIO_BATCH_SIZE_STANDARD = 168
 const XTTS_STUDIO_MAX_TTS_CHARS = 1500
 const XTTS_BALANCED_INITIAL_BUFFER_SEC = 28
 const XTTS_BALANCED_STEADY_BUFFER_SEC = 42
@@ -61,28 +57,27 @@ const getStoredXttsQualityMode = (): XttsQualityMode => {
   return 'studio'
 }
 
-const getBatchRampForEngine = (engine: string, lowEndMode: boolean, xttsQuality: XttsQualityMode) => {
-  const baseRamp = lowEndMode ? LOW_END_BATCH_RAMP : DEFAULT_BATCH_RAMP
-  if (engine === 'piper') {
-    return [STREAMED_PIPER_FIRST_BATCH_WORDS, ...baseRamp]
+const getBatchRampForEngine = (
+  engine: string,
+  lowEndMode: boolean,
+  _xttsQuality: XttsQualityMode
+) => {
+  if (engine === 'piper' || engine === 'chatterbox') {
+    return SENTENCE_ALIGNED_BATCH_RAMP
   }
-  if (engine === 'chatterbox') {
-    if (!lowEndMode && xttsQuality === 'studio') {
-      return XTTS_STUDIO_BATCH_RAMP
-    }
-    return [lowEndMode ? XTTS_LOW_END_FIRST_BATCH_WORDS : XTTS_FIRST_BATCH_WORDS, ...baseRamp]
-  }
-  return baseRamp
+
+  return lowEndMode ? LOW_END_BATCH_RAMP : DEFAULT_BATCH_RAMP
 }
 
 const getBatchSizeStandardForEngine = (
   engine: string,
   lowEndMode: boolean,
-  xttsQuality: XttsQualityMode
+  _xttsQuality: XttsQualityMode
 ) => {
-  if (engine === 'chatterbox' && !lowEndMode && xttsQuality === 'studio') {
-    return XTTS_STUDIO_BATCH_SIZE_STANDARD
+  if (engine === 'piper' || engine === 'chatterbox') {
+    return SENTENCE_ALIGNED_BATCH_SIZE_STANDARD
   }
+
   return lowEndMode ? LOW_END_BATCH_SIZE_STANDARD : DEFAULT_BATCH_SIZE_STANDARD
 }
 

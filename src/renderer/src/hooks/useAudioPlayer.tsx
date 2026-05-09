@@ -45,12 +45,74 @@ import {
 } from './audioPlayer/types'
 import {
   buildBatches,
-  estimateSentenceDurations,
+  estimateSentenceStartOffsets,
   estimateXttsBatchPlaybackSeconds,
   getXttsJoinGapForBatch,
   IMAGE_PAUSE_SEC,
   XTTS_MAX_BUFFERED_BATCHES
 } from './audioPlayer/batching'
+
+const HIGHLIGHT_TRIGGER_DELAY_SEC = 0.03
+const SILENCE_TRIM_PADDING_SEC = 0.025
+const SILENCE_TRIM_MIN_REDUCTION_SEC = 0.04
+
+const trimDecodedAudioBuffer = (ctx: AudioContext, audioBuffer: AudioBuffer) => {
+  const { length, numberOfChannels, sampleRate } = audioBuffer
+  if (length <= 0 || sampleRate <= 0) return audioBuffer
+
+  const scanStep = Math.max(1, Math.floor(sampleRate / 4000))
+  let peak = 0
+
+  for (let channel = 0; channel < numberOfChannels; channel++) {
+    const data = audioBuffer.getChannelData(channel)
+    for (let i = 0; i < length; i += scanStep) {
+      const value = Math.abs(data[i])
+      if (value > peak) peak = value
+    }
+  }
+
+  if (peak < 0.002) return audioBuffer
+
+  const threshold = Math.max(0.0015, peak * 0.018)
+  const hasSignalAt = (sampleIndex: number) => {
+    for (let channel = 0; channel < numberOfChannels; channel++) {
+      if (Math.abs(audioBuffer.getChannelData(channel)[sampleIndex]) > threshold) {
+        return true
+      }
+    }
+    return false
+  }
+
+  let firstSignal = 0
+  while (firstSignal < length && !hasSignalAt(firstSignal)) {
+    firstSignal += scanStep
+  }
+
+  let lastSignal = length - 1
+  while (lastSignal > firstSignal && !hasSignalAt(lastSignal)) {
+    lastSignal -= scanStep
+  }
+
+  const padding = Math.round(SILENCE_TRIM_PADDING_SEC * sampleRate)
+  const trimStart = Math.max(0, firstSignal - padding)
+  const trimEnd = Math.min(length, lastSignal + padding)
+  const trimmedLength = trimEnd - trimStart
+
+  if (
+    trimmedLength <= 0 ||
+    (length - trimmedLength) / sampleRate < SILENCE_TRIM_MIN_REDUCTION_SEC
+  ) {
+    return audioBuffer
+  }
+
+  const trimmed = ctx.createBuffer(numberOfChannels, trimmedLength, sampleRate)
+  for (let channel = 0; channel < numberOfChannels; channel++) {
+    trimmed.copyToChannel(audioBuffer.getChannelData(channel).slice(trimStart, trimEnd), channel)
+  }
+
+  return trimmed
+}
+
 export function useAudioPlayer({
   bookStructure,
   visualPageIndex
@@ -180,8 +242,9 @@ export function useAudioPlayer({
         rawData.byteOffset + rawData.byteLength
       ) as ArrayBuffer
       const decoded = await ctx.decodeAudioData(cleanBuffer)
-      setDecodedCache(key, decoded)
-      return decoded
+      const playableBuffer = trimDecodedAudioBuffer(ctx, decoded)
+      setDecodedCache(key, playableBuffer)
+      return playableBuffer
     } catch (err) {
       console.error('Decode Error', err)
       return null
@@ -902,18 +965,17 @@ export function useAudioPlayer({
             })
             markPlaybackStarted()
 
-            const durations = estimateSentenceDurations(
+            const sentenceStartOffsets = estimateSentenceStartOffsets(
               batch.sentences,
-              audioBuffer.duration / playbackRate
+              audioBuffer,
+              playbackRate
             )
-            let accumulatedTime = 0
-            durations.forEach((dur, idx) => {
-              const triggerTime = start + accumulatedTime + 0.08
+            sentenceStartOffsets.forEach((offset, idx) => {
+              const triggerTime = start + offset + HIGHLIGHT_TRIGGER_DELAY_SEC
               highlightScheduleRef.current.push({
                 time: triggerTime,
                 globalIndex: batch.globalIndices[idx]
               })
-              accumulatedTime += dur
             })
 
             const timeUntilNext = nextStartTimeRef.current - ctx.currentTime
@@ -967,8 +1029,13 @@ export function useAudioPlayer({
   }
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!isPlayingRef.current || isPausedRef.current || !audioCtxRef.current) return
+    let frameId = 0
+
+    const updateHighlight = () => {
+      frameId = window.requestAnimationFrame(updateHighlight)
+      if (!isPlayingRef.current || isPausedRef.current || !audioCtxRef.current) {
+        return
+      }
 
       const t = audioCtxRef.current.currentTime
       const schedule = highlightScheduleRef.current
@@ -976,7 +1043,7 @@ export function useAudioPlayer({
 
       if (cursor >= schedule.length) return
 
-      while (cursor < schedule.length && schedule[cursor].time <= t + 0.05) {
+      while (cursor < schedule.length && schedule[cursor].time <= t) {
         cursor += 1
       }
 
@@ -988,9 +1055,10 @@ export function useAudioPlayer({
         highlightedSentenceIndexRef.current = trigger.globalIndex
         setGlobalSentenceIndex(trigger.globalIndex)
       }
-    }, 50)
+    }
 
-    return () => clearInterval(interval)
+    frameId = window.requestAnimationFrame(updateHighlight)
+    return () => window.cancelAnimationFrame(frameId)
   }, [])
 
   useEffect(() => {

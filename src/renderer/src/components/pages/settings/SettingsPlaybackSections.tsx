@@ -105,7 +105,7 @@ export function VoiceDeliverySection({
         <div className={`rounded-xl border px-4 py-4 ${chrome.insetCard}`}>
           <div className={`text-sm font-medium ${chrome.body}`}>{premiumEngineName} quality preset</div>
           <div className={`mt-1 text-[11px] ${chrome.muted}`}>
-            Studio uses larger batches and less aggressive startup optimization for more natural delivery.
+            Studio keeps a deeper readiness buffer for steadier, more natural delivery.
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2">
             {(
@@ -183,7 +183,7 @@ export function PerformanceSection({
         <div>
           <h2 className={`text-xl font-semibold ${chrome.title}`}>Performance</h2>
           <p className={`text-sm mt-1 ${chrome.muted}`}>
-            Reduce buffering on low-end devices by using smaller audio batches.
+            Tune how aggressively the reader buffers generated narration.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -215,7 +215,7 @@ export function PerformanceSection({
         <div>
           <div className={`text-sm font-semibold ${chrome.body}`}>Low-end device mode</div>
           <div className={`text-xs ${chrome.muted}`}>
-            Smaller chunks, steadier playback, slightly more pauses between segments.
+            Lower readiness targets and lighter memory use, with a higher chance of pauses on slow hardware.
           </div>
         </div>
         <div
