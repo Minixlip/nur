@@ -14,6 +14,8 @@ interface BookViewerProps {
   onChapterClick: (pageIndex: number) => void
   settings: ReaderSettings
   translatedParagraphs?: string[] | null
+  translatedSentenceBlocks?: string[][] | null
+  activeTranslatedSentenceIndex?: number | null
   showTranslatedText?: boolean
   translatedLanguageLabel?: string
   translatedIsRtl?: boolean
@@ -158,6 +160,8 @@ export const BookViewer: React.FC<BookViewerProps> = ({
   onChapterClick,
   settings,
   translatedParagraphs,
+  translatedSentenceBlocks,
+  activeTranslatedSentenceIndex = null,
   showTranslatedText = false,
   translatedLanguageLabel,
   translatedIsRtl = false
@@ -180,6 +184,29 @@ export const BookViewer: React.FC<BookViewerProps> = ({
       : settings.theme === 'sepia'
         ? 'border-black/10 bg-black/[0.03] text-[#6a5a4a]'
         : 'border-black/10 bg-black/[0.03] text-zinc-600'
+  const translatedBlocksToRender = useMemo(() => {
+    const sourceBlocks =
+      translatedSentenceBlocks && translatedSentenceBlocks.length > 0
+        ? translatedSentenceBlocks
+        : (translatedParagraphs || []).map((paragraph) => [paragraph])
+    return sourceBlocks.reduce<Array<{ sentences: string[]; startIndex: number }>>(
+      (blocks, sentences) => {
+        const previousBlock = blocks[blocks.length - 1]
+        const startIndex = previousBlock
+          ? previousBlock.startIndex + previousBlock.sentences.length
+          : 0
+
+        return [
+          ...blocks,
+          {
+            sentences,
+            startIndex
+          }
+        ]
+      },
+      []
+    )
+  }, [translatedParagraphs, translatedSentenceBlocks])
 
   if (showTranslatedText) {
     if (!translatedParagraphs || translatedParagraphs.length === 0) {
@@ -204,7 +231,7 @@ export const BookViewer: React.FC<BookViewerProps> = ({
           dir={translatedIsRtl ? 'rtl' : undefined}
           className={translatedIsRtl ? 'text-right' : ''}
         >
-          {translatedParagraphs.map((paragraph, paragraphIndex) => (
+          {translatedBlocksToRender.map(({ sentences, startIndex }, paragraphIndex) => (
             <p
               key={`translated-${paragraphIndex}`}
               className={`reader-paragraph mb-7 text-lg md:text-[1.34rem] leading-relaxed tracking-[0.005em] transition-all duration-300 ${fontFamilyClass} ${themeTextClass}`}
@@ -213,7 +240,22 @@ export const BookViewer: React.FC<BookViewerProps> = ({
                 lineHeight: settings.lineHeight
               }}
             >
-              {paragraph}
+              {sentences.map((sentence, sentenceIndex) => {
+                const globalIndex = startIndex + sentenceIndex
+                const isCurrent = activeTranslatedSentenceIndex === globalIndex
+
+                return (
+                  <span
+                    key={`translated-sentence-${paragraphIndex}-${sentenceIndex}`}
+                    data-current-sentence={isCurrent ? 'true' : undefined}
+                    className={`transition-colors duration-300 px-0.5 rounded-sm ${
+                      isCurrent ? highlightClass : ''
+                    }`}
+                  >
+                    {sentence}{' '}
+                  </span>
+                )
+              })}
             </p>
           ))}
         </div>

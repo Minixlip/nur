@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TranslationTargetLanguage } from '../../../shared/translation'
 import { getStoredTtsEngine } from '../utils/tts'
 import { getStoredTtsSpeed, getStoredXttsQualityMode } from './audioPlayer/config'
+import { estimateSentenceStartOffsets } from './audioPlayer/batching'
+import { splitTextIntoSentences } from '../utils/pageTranslation'
 
 interface UseTextPreviewPlayerOptions {
   onBeforePlay?: () => Promise<void> | void
@@ -10,11 +12,18 @@ interface UseTextPreviewPlayerOptions {
 interface UseTextPreviewPlayerResult {
   isGenerating: boolean
   isPlaying: boolean
+  activeSentenceIndex: number | null
   error: string | null
-  playText: (text: string, targetLanguage?: TranslationTargetLanguage) => Promise<boolean>
+  playText: (
+    text: string,
+    targetLanguage?: TranslationTargetLanguage,
+    sentences?: string[]
+  ) => Promise<boolean>
   stop: () => Promise<void>
   clearError: () => void
 }
+
+const HIGHLIGHT_TRIGGER_DELAY_SEC = 0.03
 
 const toUint8Array = (value: Uint8Array | ArrayBuffer | number[]): Uint8Array => {
   if (value instanceof Uint8Array) return value
@@ -27,11 +36,16 @@ export function useTextPreviewPlayer({
 }: UseTextPreviewPlayerOptions = {}): UseTextPreviewPlayerResult {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [activeSentenceIndex, setActiveSentenceIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
   const sessionIdRef = useRef('')
+  const highlightFrameRef = useRef<number | null>(null)
+  const highlightScheduleRef = useRef<Array<{ time: number; index: number }>>([])
+  const highlightCursorRef = useRef(0)
+  const playbackStartTimeRef = useRef(0)
 
   const getAudioContext = useCallback(async (): Promise<AudioContext> => {
     if (!audioContextRef.current) {
@@ -51,6 +65,49 @@ export function useTextPreviewPlayer({
     }
 
     return audioContextRef.current
+  }, [])
+
+  const stopHighlightLoop = useCallback((): void => {
+    if (highlightFrameRef.current !== null) {
+      window.cancelAnimationFrame(highlightFrameRef.current)
+      highlightFrameRef.current = null
+    }
+    highlightScheduleRef.current = []
+    highlightCursorRef.current = 0
+    playbackStartTimeRef.current = 0
+    setActiveSentenceIndex(null)
+  }, [])
+
+  const runHighlightLoop = useCallback((audioContext: AudioContext): void => {
+    if (highlightFrameRef.current !== null) {
+      window.cancelAnimationFrame(highlightFrameRef.current)
+    }
+
+    const tick = (): void => {
+      const schedule = highlightScheduleRef.current
+      if (!schedule.length || !sourceRef.current) {
+        highlightFrameRef.current = null
+        return
+      }
+
+      const elapsed =
+        audioContext.currentTime - playbackStartTimeRef.current + HIGHLIGHT_TRIGGER_DELAY_SEC
+      let cursor = highlightCursorRef.current
+
+      while (cursor < schedule.length && schedule[cursor].time <= elapsed) {
+        cursor += 1
+      }
+
+      if (cursor !== highlightCursorRef.current) {
+        highlightCursorRef.current = cursor
+        const trigger = schedule[Math.max(0, cursor - 1)]
+        setActiveSentenceIndex(trigger.index)
+      }
+
+      highlightFrameRef.current = window.requestAnimationFrame(tick)
+    }
+
+    highlightFrameRef.current = window.requestAnimationFrame(tick)
   }, [])
 
   const clearSource = useCallback((stopPlayback = false): void => {
@@ -87,6 +144,7 @@ export function useTextPreviewPlayer({
 
   const stop = useCallback(async () => {
     clearSource(true)
+    stopHighlightLoop()
     setIsPlaying(false)
     setIsGenerating(false)
 
@@ -99,10 +157,10 @@ export function useTextPreviewPlayer({
     }
 
     await resetSession()
-  }, [clearSource, resetSession])
+  }, [clearSource, resetSession, stopHighlightLoop])
 
   const playText = useCallback(
-    async (text: string, targetLanguage?: TranslationTargetLanguage) => {
+    async (text: string, targetLanguage?: TranslationTargetLanguage, sentences?: string[]) => {
       const cleanText = text.trim()
       if (!cleanText) {
         setError('There is no translated text to play yet.')
@@ -115,6 +173,7 @@ export function useTextPreviewPlayer({
       try {
         setError(null)
         setIsGenerating(true)
+        stopHighlightLoop()
 
         const sessionId = `translation-preview-${Date.now()}`
         sessionIdRef.current = sessionId
@@ -148,6 +207,13 @@ export function useTextPreviewPlayer({
           audioBytes.byteOffset + audioBytes.byteLength
         ) as ArrayBuffer
         const decodedBuffer = await audioContext.decodeAudioData(audioBuffer)
+        const highlightSentences =
+          sentences?.map((sentence) => sentence.trim()).filter(Boolean) ??
+          splitTextIntoSentences(cleanText, targetLanguage || 'en')
+        const sentenceOffsets =
+          highlightSentences.length > 0
+            ? estimateSentenceStartOffsets(highlightSentences, decodedBuffer, 1)
+            : []
 
         const source = audioContext.createBufferSource()
         source.buffer = decodedBuffer
@@ -157,17 +223,26 @@ export function useTextPreviewPlayer({
         source.onended = () => {
           if (sourceRef.current !== source) return
           clearSource()
+          stopHighlightLoop()
           setIsPlaying(false)
           setIsGenerating(false)
           void resetSession()
         }
 
-        source.start()
+        highlightScheduleRef.current = sentenceOffsets.map((time, index) => ({ time, index }))
+        highlightCursorRef.current = 0
+        playbackStartTimeRef.current = audioContext.currentTime
+        source.start(playbackStartTimeRef.current)
+        if (highlightScheduleRef.current.length > 0) {
+          setActiveSentenceIndex(0)
+          runHighlightLoop(audioContext)
+        }
         setIsPlaying(true)
         setIsGenerating(false)
         return true
       } catch (playbackError) {
         clearSource(true)
+        stopHighlightLoop()
         setIsPlaying(false)
         setIsGenerating(false)
         setError(playbackError instanceof Error ? playbackError.message : 'Playback failed.')
@@ -175,7 +250,15 @@ export function useTextPreviewPlayer({
         return false
       }
     },
-    [clearSource, getAudioContext, onBeforePlay, resetSession, stop]
+    [
+      clearSource,
+      getAudioContext,
+      onBeforePlay,
+      resetSession,
+      runHighlightLoop,
+      stop,
+      stopHighlightLoop
+    ]
   )
 
   useEffect(() => {
@@ -200,6 +283,7 @@ export function useTextPreviewPlayer({
   return {
     isGenerating,
     isPlaying,
+    activeSentenceIndex,
     error,
     playText,
     stop,

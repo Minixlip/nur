@@ -12,7 +12,8 @@ import { useReaderSettings } from '../../../hooks/useReaderSettings'
 import { useTextPreviewPlayer } from '../../../hooks/useTextPreviewPlayer'
 import {
   extractPageTextForTranslation,
-  splitTranslatedParagraphs
+  splitTranslatedParagraphs,
+  splitTranslatedSentenceBlocks
 } from '../../../utils/pageTranslation'
 import AppearanceMenu from '../../AppearanceMenu'
 import { BookViewer } from '../../bookViewer'
@@ -54,6 +55,7 @@ export default function Reader(): React.JSX.Element {
   const {
     isGenerating: isGeneratingTranslatedAudio,
     isPlaying: isPlayingTranslatedAudio,
+    activeSentenceIndex: activeTranslatedSentenceIndex,
     error: translatedAudioError,
     playText: playTranslatedText,
     stop: stopTranslatedAudio,
@@ -90,6 +92,14 @@ export default function Reader(): React.JSX.Element {
   const translatedParagraphs = useMemo(
     () => splitTranslatedParagraphs(translatedText),
     [translatedText]
+  )
+  const translatedSentenceBlocks = useMemo(
+    () => splitTranslatedSentenceBlocks(translatedText, translationLanguage),
+    [translatedText, translationLanguage]
+  )
+  const translatedSentences = useMemo(
+    () => translatedSentenceBlocks.reduce<string[]>((all, block) => all.concat(block), []),
+    [translatedSentenceBlocks]
   )
   const hasCurrentTranslation = translatedParagraphs.length > 0
   const selectedTranslationLabel = TRANSLATION_LANGUAGE_LABELS[translationLanguage]
@@ -347,19 +357,19 @@ export default function Reader(): React.JSX.Element {
     setTranslationError(null)
     clearTranslatedAudioError()
     void stopTranslatedAudio()
-
-    if (translationMode === 'translated' && !hasCurrentTranslation) {
-      setTranslationMode('original')
-    }
   }, [
     activeBook?.id,
     clearTranslatedAudioError,
-    hasCurrentTranslation,
     stopTranslatedAudio,
     translationLanguage,
-    translationMode,
     visualPageIndex
   ])
+
+  useEffect(() => {
+    if (translationMode === 'translated' && !hasCurrentTranslation) {
+      setTranslationMode('original')
+    }
+  }, [hasCurrentTranslation, translationMode])
 
   useEffect(() => {
     if (!isPlaying || isPaused) return
@@ -447,12 +457,14 @@ export default function Reader(): React.JSX.Element {
       await stopTranslatedAudio()
       return
     }
-    await playTranslatedText(translatedText, translationLanguage)
+    setTranslationMode('translated')
+    await playTranslatedText(translatedText, translationLanguage, translatedSentences)
   }, [
     isGeneratingTranslatedAudio,
     isPlayingTranslatedAudio,
     playTranslatedText,
     stopTranslatedAudio,
+    translatedSentences,
     translatedText,
     translationLanguage
   ])
@@ -784,6 +796,8 @@ export default function Reader(): React.JSX.Element {
                   onChapterClick={handleChapterClick}
                   settings={settings}
                   translatedParagraphs={translatedParagraphs}
+                  translatedSentenceBlocks={translatedSentenceBlocks}
+                  activeTranslatedSentenceIndex={activeTranslatedSentenceIndex}
                   showTranslatedText={showTranslatedText}
                   translatedLanguageLabel={selectedTranslationLabel}
                   translatedIsRtl={translationLanguage === 'ar'}
