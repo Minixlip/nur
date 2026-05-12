@@ -4,9 +4,12 @@ Nur is a local-first desktop EPUB reader that turns books into private, synchron
 
 It combines an EPUB library, local text-to-speech, sentence highlighting, page translation, voice management, and book summaries in one desktop app. The goal is simple: make reading and listening feel seamless without sending a user's books or voice data to a cloud service.
 
-![Nur Preview](docs/preview.png)
-![Nur Preview](docs/preview.png)
-![Nur Preview](docs/preview.png)
+![Nur Preview](docs/1.png)
+![Nur Preview](docs/2.png)
+![Nur Preview](docs/3.png)
+![Nur Preview](docs/4.png)
+![Nur Preview](docs/5.png)
+![Nur Preview](docs/6.png)
 <video src="docs/video.mp4" width="320" height="240" controls></video>
 
 > Local-first. Private by default. Your books, voices, summaries, settings, and reading state stay on your machine.
